@@ -166,7 +166,7 @@ Displays the heading structure of the note. Click headings to navigate.
 Shows notes that link to the current note, grouped by file with:
 - Heading path context (where in the document the link appears)
 - Content preview with context type indicators:
-  - =⊢= meta (descriptive list items like =- key :: value=)
+  - =⊢= meta property
   - =§= header
   - =▤= table
   - =·= list item
