@@ -1167,21 +1167,48 @@ Returns a plist with :type and type-specific content:
                 (vui-vstack
                  :spacing 0
                  (seq-map
-                  (lambda (link-note)
-                    (vui-component 'vulpea-ui-note-link :note link-note))
+                  (lambda (link-info)
+                    (let ((link-note (plist-get link-info :note))
+                          (count (plist-get link-info :count)))
+                      (vui-hstack
+                       :spacing 1
+                       (vui-component 'vulpea-ui-note-link :note link-note)
+                       (vui-text (format "(%d)" count)
+                         :face 'vulpea-ui-widget-count-face))))
                   forward-links))
               (vui-text "No links" :face 'shadow))))))))
 
 (defun vulpea-ui--get-forward-links (note)
-  "Get notes that NOTE links to."
+  "Get all notes linked from NOTE's file with counts.
+Collects links from all headings in the file, not just the current note.
+Returns a list of plists with :note and :count, sorted by title."
   (when note
-    (let* ((links (vulpea-note-links note))
+    (let* ((path (vulpea-note-path note))
+           ;; Get all notes in this file (file-level and all headings)
+           (file-notes (vulpea-db-query-by-file-paths (list path)))
+           ;; Collect all links from all notes
+           (all-links (seq-mapcat #'vulpea-note-links file-notes))
+           ;; Filter to id links only
            (id-links (seq-filter (lambda (link)
                                    (equal "id" (plist-get link :type)))
-                                 links))
-           (ids (seq-map (lambda (link) (plist-get link :dest)) id-links)))
-      (when ids
-        (vulpea-db-query-by-ids ids)))))
+                                 all-links))
+           ;; Count occurrences of each destination ID
+           (id-counts (make-hash-table :test 'equal)))
+      (dolist (link id-links)
+        (let ((dest (plist-get link :dest)))
+          (puthash dest (1+ (gethash dest id-counts 0)) id-counts)))
+      ;; Fetch notes and build result with counts
+      (let* ((ids (hash-table-keys id-counts))
+             (notes (when ids (vulpea-db-query-by-ids ids)))
+             (result (seq-map (lambda (n)
+                                (list :note n
+                                      :count (gethash (vulpea-note-id n) id-counts)))
+                              notes)))
+        ;; Sort by title
+        (seq-sort (lambda (a b)
+                    (string< (or (vulpea-note-title (plist-get a :note)) "")
+                             (or (vulpea-note-title (plist-get b :note)) "")))
+                  result)))))
 
 
 ;;; Root component
