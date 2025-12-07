@@ -1,0 +1,18 @@
+# Eldev
+.eldev/
+Eldev-local
+
+# Byte-compiled files
+*.elc
+
+# Generated files
+*-autoloads.el
+*-pkg.el
+
+# Backups
+*~
+\#*\#
+.\#*
+
+# macOS
+.DS_Store
