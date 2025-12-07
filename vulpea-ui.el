@@ -971,24 +971,19 @@ Returns a plist with :type and type-specific content:
                          (match-beginning 0)))
            (link-end (when link-start (match-end 0))))
       (if link-start
-          ;; Extract context around the link
-          (let* ((before-start (max 0 (- link-start vulpea-ui-backlinks-prose-chars-before)))
-                 (after-end (min (length para-text)
-                                 (+ link-end vulpea-ui-backlinks-prose-chars-after)))
-                 (before-text (substring para-text before-start link-start))
-                 (after-text (substring para-text link-end after-end))
-                 ;; Clean and add ellipsis
-                 (before-clean (vulpea-ui--clean-org-links
-                                (string-trim-left before-text)))
-                 (after-clean (vulpea-ui--clean-org-links
-                               (string-trim-right after-text)))
-                 (ellipsis-before (if (> before-start 0) "..." ""))
-                 (ellipsis-after (if (< after-end (length para-text)) "..." "")))
+          ;; Extract context around the link (including the link itself)
+          (let* ((context-start (max 0 (- link-start vulpea-ui-backlinks-prose-chars-before)))
+                 (context-end (min (length para-text)
+                                   (+ link-end vulpea-ui-backlinks-prose-chars-after)))
+                 (context-text (substring para-text context-start context-end))
+                 ;; Clean links and add ellipsis
+                 (clean-text (vulpea-ui--clean-org-links context-text))
+                 (ellipsis-before (if (> context-start 0) "..." ""))
+                 (ellipsis-after (if (< context-end (length para-text)) "..." "")))
             (list :type 'prose
                   :text (format "%s%s%s"
                                 ellipsis-before
-                                (string-trim
-                                 (concat before-clean " " after-clean))
+                                (string-trim clean-text)
                                 ellipsis-after)))
         ;; Fallback: just get the line
         (list :type 'prose
@@ -1110,7 +1105,7 @@ Returns a plist with :type and type-specific content:
         (vui-text (plist-get preview :text)
           :face 'vulpea-ui-backlink-preview-face)))
       ('prose
-       (vui-text (concat "\"" (plist-get preview :text) "\"")
+       (vui-text (plist-get preview :text)
          :face 'vulpea-ui-backlink-preview-face))
       (_
        (vui-text (or (plist-get preview :text) "")
