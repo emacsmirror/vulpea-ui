@@ -1049,106 +1049,128 @@ Returns a plist with :type and type-specific content:
 
 (defun vulpea-ui--render-backlink-group (group)
   "Render a backlink GROUP with file note and mentions."
-  (let ((file-note (plist-get group :file-note))
-        (mentions (plist-get group :mentions))
-        (path (plist-get group :path)))
+  (let* ((file-note (plist-get group :file-note))
+         (mentions (plist-get group :mentions))
+         (path (plist-get group :path))
+         ;; Group mentions by heading path
+         (grouped (vulpea-ui--group-mentions-by-heading mentions)))
     (vui-vstack
-     :spacing 0
+     :spacing 1
      ;; File-level note link
      (if file-note
          (vui-component 'vulpea-ui-note-link :note file-note)
        (vui-text (file-name-nondirectory path) :face 'shadow))
-     ;; Mentions within the file
-     (when mentions
+     ;; Mentions grouped by heading
+     (when grouped
        (vui-vstack
-        :spacing 0
+        :spacing 1
         :indent 2
-        (seq-map (lambda (m) (vulpea-ui--render-backlink-mention m path))
-                 mentions))))))
+        (seq-map (lambda (hg) (vulpea-ui--render-heading-group hg path))
+                 grouped))))))
 
-(defun vulpea-ui--render-backlink-mention (mention path)
-  "Render a single backlink MENTION from file at PATH."
-  (let* ((heading-path (plist-get mention :heading-path))
-         (preview (plist-get mention :preview))
-         (pos (plist-get mention :pos))
-         ;; Calculate indent based on heading depth (0 for first level, 2 for each additional)
-         (depth (length heading-path))
-         (extra-indent (if (> depth 1) (* (1- depth) 2) 0))
-         ;; Only show the last heading in the path (parent context is shown via indent)
+(defun vulpea-ui--group-mentions-by-heading (mentions)
+  "Group MENTIONS by their heading path.
+Returns list of (:heading-path :depth :mentions) plists."
+  (let ((groups (make-hash-table :test 'equal))
+        (order nil))
+    (dolist (m mentions)
+      (let* ((heading-path (plist-get m :heading-path))
+             (key (or heading-path 'file-level)))
+        (unless (gethash key groups)
+          (push key order))
+        (push m (gethash key groups))))
+    ;; Build result in original order
+    (seq-map (lambda (key)
+               (list :heading-path (if (eq key 'file-level) nil key)
+                     :depth (if (eq key 'file-level) 0 (length key))
+                     :mentions (nreverse (gethash key groups))))
+             (nreverse order))))
+
+(defun vulpea-ui--render-heading-group (hg path)
+  "Render a heading group HG from file at PATH."
+  (let* ((heading-path (plist-get hg :heading-path))
+         (depth (plist-get hg :depth))
+         (mentions (plist-get hg :mentions))
+         ;; Extra indent for nested headings (2 per level after first)
+         (heading-indent (if (> depth 1) (* (1- depth) 2) 0))
+         ;; Only show the last heading in the path
          (display-heading (when heading-path (car (last heading-path)))))
     (vui-vstack
      :spacing 0
-     :indent extra-indent
-     (vui-hstack
-      ;; Jump button (arrow)
-      (vui-button "→"
-        :face 'vulpea-ui-backlink-heading-face
-        :on-click (lambda ()
-                    (vulpea-ui--jump-to-file-position path pos))
-        :help-echo nil)
-      ;; Content: heading and/or preview
-      (vui-vstack
-       :spacing 0
-       :indent 4
-       (when display-heading
-         (vui-text display-heading
-           :face 'vulpea-ui-backlink-heading-face))
-       (when preview
-         (vulpea-ui--render-preview preview)))))))
+     :indent heading-indent
+     ;; Heading text (if any) - bold, not clickable unless it's a header context
+     (when display-heading
+       (vui-text display-heading :face 'vulpea-ui-backlink-heading-face))
+     ;; Mentions under this heading
+     (vui-vstack
+      :spacing 0
+      :indent (if display-heading 2 0)
+      (seq-map (lambda (m) (vulpea-ui--render-backlink-mention m path))
+               mentions)))))
 
-(defun vulpea-ui--render-preview (preview)
-  "Render PREVIEW based on its type."
-  (let ((type (plist-get preview :type)))
+(defun vulpea-ui--render-backlink-mention (mention path)
+  "Render a single backlink MENTION from file at PATH.
+Renders the preview as a clickable button to jump to the mention."
+  (let* ((preview (plist-get mention :preview))
+         (pos (plist-get mention :pos)))
+    (when preview
+      (vulpea-ui--render-preview-button preview path pos))))
+
+(defun vulpea-ui--render-preview-button (preview path pos)
+  "Render PREVIEW as a clickable button to jump to PATH at POS."
+  (let ((type (plist-get preview :type))
+        (on-click (lambda () (vulpea-ui--jump-to-file-position path pos))))
     (pcase type
       ('meta
-       (vui-hstack
-        :spacing 0
-        (vui-text (concat "⊢ " (plist-get preview :key) ": ")
-          :face 'vulpea-ui-backlink-meta-key-face)
-        (vui-text (or (plist-get preview :value) "")
-          :face 'vulpea-ui-backlink-meta-value-face)))
+       (vui-button (concat "⊢ " (plist-get preview :key) ": "
+                           (or (plist-get preview :value) ""))
+         :face 'vulpea-ui-backlink-preview-face
+         :no-decoration t
+         :on-click on-click
+         :help-echo nil))
       ('header
-       (vui-hstack
-        :spacing 1
-        (vui-text "§" :face 'vulpea-ui-backlink-context-face)
-        (vui-text (plist-get preview :text)
-          :face 'vulpea-ui-backlink-preview-face)))
+       ;; Header context means the link is IN the heading text - make it clickable
+       (vui-button (concat "§ " (plist-get preview :text))
+         :face 'vulpea-ui-backlink-preview-face
+         :no-decoration t
+         :on-click on-click
+         :help-echo nil))
       ('table
-       (vui-hstack
-        :spacing 1
-        (vui-text "▤" :face 'vulpea-ui-backlink-context-face)
-        (vui-text (plist-get preview :text)
-          :face 'vulpea-ui-backlink-preview-face)))
+       (vui-button (concat "▤ " (plist-get preview :text))
+         :face 'vulpea-ui-backlink-preview-face
+         :no-decoration t
+         :on-click on-click
+         :help-echo nil))
       ('list
-       (vui-hstack
-        :spacing 1
-        (vui-text "·" :face 'vulpea-ui-backlink-context-face)
-        (vui-text (plist-get preview :text)
-          :face 'vulpea-ui-backlink-preview-face)))
+       (vui-button (concat "· " (plist-get preview :text))
+         :face 'vulpea-ui-backlink-preview-face
+         :no-decoration t
+         :on-click on-click
+         :help-echo nil))
       ('quote
-       (vui-hstack
-        :spacing 1
-        (vui-text ">" :face 'vulpea-ui-backlink-context-face)
-        (vui-text (plist-get preview :text)
-          :face 'vulpea-ui-backlink-preview-face)))
+       (vui-button (concat "> " (plist-get preview :text))
+         :face 'vulpea-ui-backlink-preview-face
+         :no-decoration t
+         :on-click on-click
+         :help-echo nil))
       ('code
-       (vui-hstack
-        :spacing 1
-        (vui-text "λ" :face 'vulpea-ui-backlink-context-face)
-        (vui-text (plist-get preview :text)
-          :face 'vulpea-ui-backlink-preview-face)))
+       (vui-button (concat "λ " (plist-get preview :text))
+         :face 'vulpea-ui-backlink-preview-face
+         :no-decoration t
+         :on-click on-click
+         :help-echo nil))
       ('footnote
-       (vui-hstack
-        :spacing 1
-        (vui-text "†" :face 'vulpea-ui-backlink-context-face)
-        (vui-text (plist-get preview :text)
-          :face 'vulpea-ui-backlink-preview-face)))
-      ('prose
-       (vui-text (plist-get preview :text)
-         :face 'vulpea-ui-backlink-preview-face))
+       (vui-button (concat "† " (plist-get preview :text))
+         :face 'vulpea-ui-backlink-preview-face
+         :no-decoration t
+         :on-click on-click
+         :help-echo nil))
       (_
-       (vui-text (or (plist-get preview :text) "")
-         :face 'vulpea-ui-backlink-preview-face)))))
+       (vui-button (or (plist-get preview :text) "")
+         :face 'vulpea-ui-backlink-preview-face
+         :no-decoration t
+         :on-click on-click
+         :help-echo nil)))))
 
 (defun vulpea-ui--jump-to-file-position (path pos)
   "Jump to position POS in file at PATH."
