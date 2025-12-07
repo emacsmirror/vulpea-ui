@@ -158,13 +158,31 @@ For large org files or many backlinks, enable fast parsing:
 
 ** Stats widget
 
+#+begin_html
+<p align="center">
+  <img width="50%" src="./images/vulpea-ui-widget-stats.png" alt="Screenshot">
+</p>
+#+end_html
+
 Shows character count, word count, and link count for the current note.
 
 ** Outline widget
 
+#+begin_html
+<p align="center">
+  <img width="50%" src="./images/vulpea-ui-widget-outline.png" alt="Screenshot">
+</p>
+#+end_html
+
 Displays the heading structure of the note. Click headings to navigate.
 
 ** Backlinks widget
+
+#+begin_html
+<p align="center">
+  <img width="50%" src="./images/vulpea-ui-widget-backlinks.png" alt="Screenshot">
+</p>
+#+end_html
 
 Shows notes that link to the current note, grouped by file with:
 - Heading path context (where in the document the link appears)
@@ -179,6 +197,12 @@ Shows notes that link to the current note, grouped by file with:
   - (no indicator) prose
 
 ** Links widget
+
+#+begin_html
+<p align="center">
+  <img width="50%" src="./images/vulpea-ui-widget-links.png" alt="Screenshot">
+</p>
+#+end_html
 
 Shows notes that the current note links to.
 
