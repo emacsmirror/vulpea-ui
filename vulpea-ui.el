@@ -108,6 +108,17 @@ When nil, sidebar remains visible with stale content."
   :type 'boolean
   :group 'vulpea-ui)
 
+(defcustom vulpea-ui-backlinks-show-preview t
+  "Whether to show content preview in backlinks widget.
+When non-nil, shows a snippet of text around each backlink mention."
+  :type 'boolean
+  :group 'vulpea-ui)
+
+(defcustom vulpea-ui-backlinks-preview-lines 2
+  "Number of lines to show in backlink previews."
+  :type 'integer
+  :group 'vulpea-ui)
+
 
 ;;; Context
 
@@ -135,6 +146,16 @@ When nil, sidebar remains visible with stale content."
 (defface vulpea-ui-stats-face
   '((t :inherit shadow))
   "Face for statistics text."
+  :group 'vulpea-ui)
+
+(defface vulpea-ui-backlink-preview-face
+  '((t :inherit shadow))
+  "Face for backlink preview text."
+  :group 'vulpea-ui)
+
+(defface vulpea-ui-backlink-heading-face
+  '((t :inherit shadow))
+  "Face for backlink heading path."
   :group 'vulpea-ui)
 
 
@@ -414,8 +435,7 @@ STRIP-METADATA removes org metadata lines when non-nil."
           ;; Skip the heading line itself if it's a heading note
           (when (> (vulpea-note-level note) 0)
             (forward-line 1))
-          (let ((start (point))
-                (lines nil)
+          (let ((lines nil)
                 (count 0))
             (while (and (< count max-lines)
                         (not (eobp)))
@@ -573,31 +593,226 @@ NOTE is the parent note for navigation."
 ;;; Backlinks widget
 
 (defcomponent vulpea-ui-widget-backlinks ()
-  "Widget displaying notes that link to the current note."
+  "Widget displaying notes that link to the current note.
+Groups backlinks by file and shows heading context with optional previews."
   :render
   (let ((note (use-vulpea-ui-note)))
     (when note
-      (let ((backlinks (use-memo (note)
-                         (vulpea-ui--get-backlinks note))))
+      (let ((grouped (use-memo (note)
+                       (vulpea-ui--get-grouped-backlinks note))))
         (vui-component 'vulpea-ui-widget
           :title "Backlinks"
-          :count (length backlinks)
+          :count (vulpea-ui--count-backlink-mentions grouped)
           :children
           (lambda ()
-            (if backlinks
+            (if grouped
                 (vui-vstack
-                 :spacing 0
-                 (seq-map
-                  (lambda (bl-note)
-                    (vui-component 'vulpea-ui-note-link :note bl-note))
-                  backlinks))
+                 :spacing 1
+                 (seq-map #'vulpea-ui--render-backlink-group grouped))
               (vui-text "No backlinks" :face 'shadow))))))))
 
-(defun vulpea-ui--get-backlinks (note)
-  "Get notes that link to NOTE."
+(defun vulpea-ui--get-grouped-backlinks (note)
+  "Get backlinks to NOTE grouped by file.
+Returns a list of plists with :file-note and :mentions.
+Each mention has :heading-path, :pos, and :preview."
   (when note
-    (vulpea-db-query-by-links-some
-     (list (cons "id" (vulpea-note-id note))))))
+    (let* ((target-id (vulpea-note-id note))
+           (backlinks (vulpea-db-query-by-links-some
+                       (list (cons "id" target-id))))
+           ;; Group backlinks by file path
+           (by-path (make-hash-table :test 'equal)))
+      ;; Collect all mentions grouped by path
+      (dolist (bl backlinks)
+        (let* ((path (vulpea-note-path bl))
+               (links (vulpea-note-links bl))
+               ;; Find links pointing to our target
+               (target-links (seq-filter
+                              (lambda (link)
+                                (and (equal "id" (plist-get link :type))
+                                     (equal target-id (plist-get link :dest))))
+                              links)))
+          (dolist (link target-links)
+            (let ((pos (plist-get link :pos)))
+              (push (list :pos pos :source-note bl)
+                    (gethash path by-path))))))
+      ;; Batch fetch file-level notes
+      (let* ((paths (hash-table-keys by-path))
+             (file-notes (when paths
+                           (vulpea-db-query-by-file-paths paths 0)))
+             (file-notes-by-path (make-hash-table :test 'equal)))
+        ;; Index file notes by path
+        (dolist (fn file-notes)
+          (puthash (vulpea-note-path fn) fn file-notes-by-path))
+        ;; Build grouped result
+        (let ((result nil))
+          (dolist (path paths)
+            (let* ((file-note (gethash path file-notes-by-path))
+                   (mentions (gethash path by-path))
+                   ;; Sort mentions by position
+                   (sorted-mentions (seq-sort
+                                     (lambda (a b)
+                                       (< (plist-get a :pos) (plist-get b :pos)))
+                                     mentions))
+                   ;; Enrich mentions with heading context and preview
+                   (enriched (vulpea-ui--enrich-backlink-mentions
+                              path sorted-mentions)))
+              (when (or file-note enriched)
+                (push (list :file-note file-note
+                            :path path
+                            :mentions enriched)
+                      result))))
+          ;; Sort groups by file-note title
+          (seq-sort (lambda (a b)
+                      (string< (or (vulpea-note-title (plist-get a :file-note)) "")
+                               (or (vulpea-note-title (plist-get b :file-note)) "")))
+                    result))))))
+
+(defun vulpea-ui--enrich-backlink-mentions (path mentions)
+  "Enrich MENTIONS with heading context and preview from file at PATH."
+  (when (and path (file-exists-p path) mentions)
+    (with-temp-buffer
+      (insert-file-contents path)
+      (org-mode)
+      ;; Parse all headings once
+      (let ((headings (vulpea-ui--parse-all-headings)))
+        (seq-map
+         (lambda (mention)
+           (let* ((pos (plist-get mention :pos))
+                  (heading-path (vulpea-ui--find-heading-path headings pos))
+                  (preview (when vulpea-ui-backlinks-show-preview
+                             (vulpea-ui--extract-preview pos))))
+             (list :pos pos
+                   :heading-path heading-path
+                   :preview preview)))
+         mentions)))))
+
+(defun vulpea-ui--parse-all-headings ()
+  "Parse all headings in current buffer.
+Returns list of (:title :level :begin :end) plists sorted by position."
+  (let ((headings nil)
+        (archive-tag org-archive-tag))
+    (org-element-map (org-element-parse-buffer 'headline) 'headline
+      (lambda (hl)
+        (unless (vulpea-ui--heading-archived-p hl archive-tag)
+          (push (list :title (org-element-property :raw-value hl)
+                      :level (org-element-property :level hl)
+                      :begin (org-element-property :begin hl)
+                      :end (org-element-property :end hl))
+                headings))))
+    (seq-sort (lambda (a b) (< (plist-get a :begin) (plist-get b :begin)))
+              headings)))
+
+(defun vulpea-ui--find-heading-path (headings pos)
+  "Find the heading path for position POS given HEADINGS.
+Returns a list of heading titles from outermost to innermost."
+  (let ((path nil)
+        (current-level 0))
+    (dolist (h headings)
+      (let ((begin (plist-get h :begin))
+            (end (plist-get h :end))
+            (level (plist-get h :level))
+            (title (plist-get h :title)))
+        (when (and (<= begin pos) (< pos end))
+          ;; This heading contains our position
+          (cond
+           ;; New top-level heading, reset path
+           ((= level 1)
+            (setq path (list title)
+                  current-level 1))
+           ;; Deeper heading, add to path
+           ((> level current-level)
+            (setq path (append path (list title))
+                  current-level level))
+           ;; Same or shallower level, replace at this level
+           ((<= level current-level)
+            (setq path (append (seq-take path (1- level)) (list title))
+                  current-level level))))))
+    path))
+
+(defun vulpea-ui--extract-preview (pos)
+  "Extract preview text around POS in current buffer."
+  (save-excursion
+    (goto-char pos)
+    ;; Move to beginning of line containing the link
+    (beginning-of-line)
+    (let ((lines-to-get vulpea-ui-backlinks-preview-lines)
+          (lines nil))
+      ;; Collect lines
+      (dotimes (_ lines-to-get)
+        (unless (eobp)
+          (let ((line (buffer-substring-no-properties
+                       (line-beginning-position)
+                       (line-end-position))))
+            ;; Skip empty lines and metadata
+            (unless (or (string-empty-p (string-trim line))
+                        (string-match-p "^[ \t]*:PROPERTIES:" line)
+                        (string-match-p "^[ \t]*:END:" line)
+                        (string-match-p "^#\\+" line))
+              (push (string-trim line) lines)))
+          (forward-line 1)))
+      (when lines
+        (string-join (nreverse lines) " ")))))
+
+(defun vulpea-ui--count-backlink-mentions (grouped)
+  "Count total mentions across all GROUPED backlinks."
+  (seq-reduce (lambda (acc group)
+                (+ acc (length (plist-get group :mentions))))
+              grouped 0))
+
+(defun vulpea-ui--render-backlink-group (group)
+  "Render a backlink GROUP with file note and mentions."
+  (let ((file-note (plist-get group :file-note))
+        (mentions (plist-get group :mentions))
+        (path (plist-get group :path)))
+    (vui-vstack
+     :spacing 0
+     ;; File-level note link
+     (if file-note
+         (vui-component 'vulpea-ui-note-link :note file-note)
+       (vui-text (file-name-nondirectory path) :face 'shadow))
+     ;; Mentions within the file
+     (when mentions
+       (vui-vstack
+        :spacing 0
+        :indent 2
+        (seq-map (lambda (m) (vulpea-ui--render-backlink-mention m path))
+                 mentions))))))
+
+(defun vulpea-ui--render-backlink-mention (mention path)
+  "Render a single backlink MENTION from file at PATH."
+  (let ((heading-path (plist-get mention :heading-path))
+        (preview (plist-get mention :preview))
+        (pos (plist-get mention :pos)))
+    (vui-vstack
+     :spacing 0
+     ;; Heading path (if any)
+     (when heading-path
+       (vui-button (concat "* " (string-join heading-path " > "))
+         :face 'vulpea-ui-backlink-heading-face
+         :on-click (lambda ()
+                     (vulpea-ui--jump-to-file-position path pos))))
+     ;; Preview text
+     (when preview
+       (if heading-path
+           (vui-vstack
+            :indent 2
+            (vui-text preview :face 'vulpea-ui-backlink-preview-face))
+         ;; No heading, make preview clickable
+         (vui-button preview
+           :face 'vulpea-ui-backlink-preview-face
+           :on-click (lambda ()
+                       (vulpea-ui--jump-to-file-position path pos))))))))
+
+(defun vulpea-ui--jump-to-file-position (path pos)
+  "Jump to position POS in file at PATH."
+  (when (and path pos)
+    (let ((main-win (vulpea-ui--get-main-window)))
+      (when main-win
+        (select-window main-win)
+        (find-file path)
+        (goto-char pos)
+        (org-fold-show-entry)
+        (recenter)))))
 
 
 ;;; Forward links widget
