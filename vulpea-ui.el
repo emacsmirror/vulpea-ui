@@ -445,7 +445,8 @@ CHILDREN is a function returning the widget content."
     :spacing 1
     (vui-button (if collapsed "▶" "▼")
       :on-click (lambda () (vui-set-state :collapsed (not collapsed)))
-      :face 'vulpea-ui-widget-header-face)
+      :face 'vulpea-ui-widget-header-face
+      :help-echo nil)
     (vui-text title :face 'vulpea-ui-widget-header-face)
     (when count
       (vui-text (format "(%s)" count) :face 'vulpea-ui-widget-count-face)))
@@ -468,7 +469,8 @@ ON-CLICK is an optional callback (defaults to `vulpea-ui-visit-note')."
   (when note
     (vui-button (or (vulpea-note-title note) "(untitled)")
       :on-click (lambda ()
-                  (funcall (or on-click #'vulpea-ui-visit-note) note)))))
+                  (funcall (or on-click #'vulpea-ui-visit-note) note))
+      :help-echo nil)))
 
 (defcomponent vulpea-ui-note-preview (note max-lines strip-drawers strip-metadata)
   "Rendered preview of note content.
@@ -639,7 +641,8 @@ NOTE is the parent note for navigation."
        :face 'shadow
        :no-decoration t
        :on-click (lambda ()
-                   (vulpea-ui--jump-to-position note pos))))))
+                   (vulpea-ui--jump-to-position note pos))
+       :help-echo nil))))
 
 (defun vulpea-ui--jump-to-position (note pos)
   "Jump to position POS in NOTE's file."
@@ -1047,7 +1050,8 @@ Returns a plist with :type and type-specific content:
      (vui-button "→"
        :face 'vulpea-ui-backlink-heading-face
        :on-click (lambda ()
-                   (vulpea-ui--jump-to-file-position path pos)))
+                   (vulpea-ui--jump-to-file-position path pos))
+       :help-echo nil)
      ;; Content: heading path and/or preview
      (vui-vstack
       :spacing 0
@@ -1177,7 +1181,7 @@ Returns a plist with :type and type-specific content:
   "Root component for the sidebar with NOTE context."
   :render
   (vulpea-ui-note-provider note
-    (vui-component 'vulpea-ui-sidebar-content)))
+                           (vui-component 'vulpea-ui-sidebar-content)))
 
 
 ;;; Rendering
