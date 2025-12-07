@@ -115,7 +115,17 @@ When non-nil, shows a snippet of text around each backlink mention."
   :group 'vulpea-ui)
 
 (defcustom vulpea-ui-backlinks-preview-lines 2
-  "Number of lines to show in backlink previews."
+  "Number of lines to show in backlink previews for prose context."
+  :type 'integer
+  :group 'vulpea-ui)
+
+(defcustom vulpea-ui-backlinks-prose-chars-before 30
+  "Number of characters to show before link in prose previews."
+  :type 'integer
+  :group 'vulpea-ui)
+
+(defcustom vulpea-ui-backlinks-prose-chars-after 50
+  "Number of characters to show after link in prose previews."
   :type 'integer
   :group 'vulpea-ui)
 
@@ -156,6 +166,21 @@ When non-nil, shows a snippet of text around each backlink mention."
 (defface vulpea-ui-backlink-heading-face
   '((t :inherit shadow))
   "Face for backlink heading path."
+  :group 'vulpea-ui)
+
+(defface vulpea-ui-backlink-meta-key-face
+  '((t :inherit (shadow bold)))
+  "Face for meta block keys in backlink previews."
+  :group 'vulpea-ui)
+
+(defface vulpea-ui-backlink-meta-value-face
+  '((t :inherit shadow))
+  "Face for meta block values in backlink previews."
+  :group 'vulpea-ui)
+
+(defface vulpea-ui-backlink-context-face
+  '((t :inherit shadow))
+  "Face for context type indicators (§, •, >, etc.) in backlink previews."
   :group 'vulpea-ui)
 
 
@@ -655,7 +680,7 @@ Each mention has :heading-path, :pos, and :preview."
                                      mentions))
                    ;; Enrich mentions with heading context and preview
                    (enriched (vulpea-ui--enrich-backlink-mentions
-                              path sorted-mentions)))
+                              path sorted-mentions target-id)))
               (when (or file-note enriched)
                 (push (list :file-note file-note
                             :path path
@@ -667,8 +692,9 @@ Each mention has :heading-path, :pos, and :preview."
                                (or (vulpea-note-title (plist-get b :file-note)) "")))
                     result))))))
 
-(defun vulpea-ui--enrich-backlink-mentions (path mentions)
-  "Enrich MENTIONS with heading context and preview from file at PATH."
+(defun vulpea-ui--enrich-backlink-mentions (path mentions target-id)
+  "Enrich MENTIONS with heading context and preview from file at PATH.
+TARGET-ID is the ID of the note being linked to (for prose context extraction)."
   (when (and path (file-exists-p path) mentions)
     (with-temp-buffer
       (insert-file-contents path)
@@ -680,7 +706,7 @@ Each mention has :heading-path, :pos, and :preview."
            (let* ((pos (plist-get mention :pos))
                   (heading-path (vulpea-ui--find-heading-path headings pos))
                   (preview (when vulpea-ui-backlinks-show-preview
-                             (vulpea-ui--extract-preview pos))))
+                             (vulpea-ui--extract-preview pos target-id))))
              (list :pos pos
                    :heading-path heading-path
                    :preview preview)))
@@ -729,63 +755,168 @@ Returns a list of heading titles from outermost to innermost."
                   current-level level))))))
     path))
 
-(defun vulpea-ui--extract-preview (pos)
-  "Extract preview text around POS in current buffer.
-If POS is within a meta block (- key :: value), extract just that meta entry.
-Otherwise, extract surrounding lines."
+(defun vulpea-ui--extract-preview (pos target-id)
+  "Extract preview info around POS in current buffer.
+TARGET-ID is the ID of the note being linked to.
+Returns a plist with :type and type-specific content:
+  - :type meta    -> :key :value
+  - :type header  -> :text
+  - :type table   -> :text
+  - :type list    -> :text
+  - :type quote   -> :text
+  - :type code    -> :text
+  - :type footnote -> :text
+  - :type prose   -> :text"
   (save-excursion
     (goto-char pos)
-    (beginning-of-line)
+    (let* ((line (buffer-substring-no-properties
+                  (line-beginning-position)
+                  (line-end-position)))
+           (context-type (vulpea-ui--detect-context-type pos line)))
+      (pcase context-type
+        ('meta (vulpea-ui--extract-meta pos line))
+        ('header (vulpea-ui--extract-header line))
+        ('table (vulpea-ui--extract-table pos))
+        ('list (vulpea-ui--extract-list line))
+        ('quote (vulpea-ui--extract-quote line))
+        ('code (vulpea-ui--extract-code line))
+        ('footnote (vulpea-ui--extract-footnote line))
+        (_ (vulpea-ui--extract-prose pos target-id))))))
+
+(defun vulpea-ui--detect-context-type (pos line)
+  "Detect the context type at POS given LINE content."
+  (cond
+   ;; Meta block: - key :: value
+   ((string-match-p "^[ \t]*- [^:]+[ \t]+::" line) 'meta)
+   ;; Header: starts with *
+   ((string-match-p "^\\*+ " line) 'header)
+   ;; Table: starts with |
+   ((string-match-p "^[ \t]*|" line) 'table)
+   ;; Quote block: check if inside #+BEGIN_QUOTE
+   ((vulpea-ui--inside-block-p pos "QUOTE") 'quote)
+   ;; Code/src block
+   ((or (vulpea-ui--inside-block-p pos "SRC")
+        (vulpea-ui--inside-block-p pos "EXAMPLE"))
+    'code)
+   ;; Footnote: [fn:...]
+   ((string-match-p "^\\[fn:" line) 'footnote)
+   ;; List item (non-meta): - item or + item or 1. item
+   ((string-match-p "^[ \t]*[-+*] [^:]" line) 'list)
+   ((string-match-p "^[ \t]*[0-9]+[.)] " line) 'list)
+   ;; Default: prose
+   (t 'prose)))
+
+(defun vulpea-ui--inside-block-p (pos block-type)
+  "Return non-nil if POS is inside a block of BLOCK-TYPE."
+  (save-excursion
+    (goto-char pos)
+    (let ((case-fold-search t)
+          (begin-re (format "^[ \t]*#\\+BEGIN_%s" block-type))
+          (end-re (format "^[ \t]*#\\+END_%s" block-type)))
+      (and (re-search-backward begin-re nil t)
+           (progn
+             (re-search-forward end-re nil t)
+             (> (point) pos))))))
+
+(defun vulpea-ui--extract-meta (_pos line)
+  "Extract meta block info from LINE."
+  (when (string-match "^[ \t]*- \\([^:]+\\)[ \t]+:: *\\(.*\\)$" line)
+    (let ((key (string-trim (match-string 1 line)))
+          (value (vulpea-ui--clean-org-links (match-string 2 line))))
+      (list :type 'meta :key key :value value))))
+
+(defun vulpea-ui--extract-header (line)
+  "Extract header info from LINE."
+  (when (string-match "^\\*+ \\(.*\\)$" line)
+    (list :type 'header
+          :text (vulpea-ui--clean-org-links (match-string 1 line)))))
+
+(defun vulpea-ui--extract-table (pos)
+  "Extract table cell info around POS."
+  (save-excursion
+    (goto-char pos)
     (let ((line (buffer-substring-no-properties
                  (line-beginning-position)
                  (line-end-position))))
-      (if (vulpea-ui--meta-line-p line)
-          ;; Meta block: extract just this meta entry
-          (vulpea-ui--clean-preview
-           (vulpea-ui--extract-meta-entry pos))
-        ;; Regular content: extract surrounding lines
-        (vulpea-ui--clean-preview
-         (vulpea-ui--extract-context-lines pos))))))
+      ;; Find which cell contains the link
+      (let ((cells (split-string line "|" t "[ \t]*")))
+        (list :type 'table
+              :text (vulpea-ui--clean-org-links
+                     (string-join cells " | ")))))))
 
-(defun vulpea-ui--meta-line-p (line)
-  "Return non-nil if LINE is a meta block entry (- key :: value)."
-  (string-match-p "^[ \t]*- [^:]+[ \t]+::" line))
+(defun vulpea-ui--extract-list (line)
+  "Extract list item info from LINE."
+  (let ((text (replace-regexp-in-string
+               "^[ \t]*[-+*] \\|^[ \t]*[0-9]+[.)] "
+               ""
+               line)))
+    (list :type 'list
+          :text (vulpea-ui--clean-org-links (string-trim text)))))
 
-(defun vulpea-ui--extract-meta-entry (pos)
-  "Extract the meta entry at POS.
-A meta entry starts with `- key ::` and continues until the next
-meta entry or end of the list item."
+(defun vulpea-ui--extract-quote (line)
+  "Extract quote info from LINE."
+  (list :type 'quote
+        :text (vulpea-ui--clean-org-links (string-trim line))))
+
+(defun vulpea-ui--extract-code (line)
+  "Extract code/example info from LINE."
+  (list :type 'code
+        :text (string-trim line)))
+
+(defun vulpea-ui--extract-footnote (line)
+  "Extract footnote info from LINE."
+  (let ((text (replace-regexp-in-string "^\\[fn:[^]]*\\] *" "" line)))
+    (list :type 'footnote
+          :text (vulpea-ui--clean-org-links (string-trim text)))))
+
+(defun vulpea-ui--extract-prose (pos target-id)
+  "Extract prose context around POS for link to TARGET-ID."
   (save-excursion
     (goto-char pos)
-    (beginning-of-line)
-    (buffer-substring-no-properties
-     (line-beginning-position)
-     (line-end-position))))
-
-(defun vulpea-ui--extract-context-lines (pos)
-  "Extract context lines around POS."
-  (save-excursion
-    (goto-char pos)
-    (beginning-of-line)
-    (let ((lines-to-get vulpea-ui-backlinks-preview-lines)
-          (lines nil))
-      (dotimes (_ lines-to-get)
-        (unless (eobp)
-          (let ((line (buffer-substring-no-properties
+    ;; Find the paragraph boundaries
+    (let* ((para-start (save-excursion
+                         (backward-paragraph)
+                         (skip-chars-forward " \t\n")
+                         (point)))
+           (para-end (save-excursion
+                       (forward-paragraph)
+                       (point)))
+           (para-text (buffer-substring-no-properties para-start para-end))
+           ;; Find the link position within paragraph
+           (link-re (format "\\[\\[id:%s\\]\\(?:\\[[^]]*\\]\\)?\\]" target-id))
+           (link-start (when (string-match link-re para-text)
+                         (match-beginning 0)))
+           (link-end (when link-start (match-end 0))))
+      (if link-start
+          ;; Extract context around the link
+          (let* ((before-start (max 0 (- link-start vulpea-ui-backlinks-prose-chars-before)))
+                 (after-end (min (length para-text)
+                                 (+ link-end vulpea-ui-backlinks-prose-chars-after)))
+                 (before-text (substring para-text before-start link-start))
+                 (after-text (substring para-text link-end after-end))
+                 ;; Clean and add ellipsis
+                 (before-clean (vulpea-ui--clean-org-links
+                                (string-trim-left before-text)))
+                 (after-clean (vulpea-ui--clean-org-links
+                               (string-trim-right after-text)))
+                 (ellipsis-before (if (> before-start 0) "..." ""))
+                 (ellipsis-after (if (< after-end (length para-text)) "..." "")))
+            (list :type 'prose
+                  :text (format "%s%s%s"
+                                ellipsis-before
+                                (string-trim
+                                 (concat before-clean " " after-clean))
+                                ellipsis-after)))
+        ;; Fallback: just get the line
+        (list :type 'prose
+              :text (vulpea-ui--clean-org-links
+                     (string-trim
+                      (buffer-substring-no-properties
                        (line-beginning-position)
-                       (line-end-position))))
-            (unless (or (string-empty-p (string-trim line))
-                        (string-match-p "^[ \t]*:PROPERTIES:" line)
-                        (string-match-p "^[ \t]*:END:" line)
-                        (string-match-p "^#\\+" line))
-              (push (string-trim line) lines)))
-          (forward-line 1)))
-      (when lines
-        (string-join (nreverse lines) " ")))))
+                       (line-end-position)))))))))
 
-(defun vulpea-ui--clean-preview (text)
-  "Clean up TEXT for display as preview.
-Removes org link syntax and cleans up whitespace."
+(defun vulpea-ui--clean-org-links (text)
+  "Clean org link syntax from TEXT."
   (when text
     (let ((result text))
       ;; Replace [[id:...][description]] with description
@@ -798,14 +929,13 @@ Removes org link syntax and cleans up whitespace."
                     "\\[\\[id:[^]]+\\]\\]"
                     ""
                     result))
-      ;; Replace [[file:...][description]] with description
+      ;; Replace [[any:...][description]] with description
       (setq result (replace-regexp-in-string
                     "\\[\\[[^]]+\\]\\[\\([^]]+\\)\\]\\]"
                     "\\1"
                     result))
       ;; Clean up multiple spaces
       (setq result (replace-regexp-in-string "[ \t]+" " " result))
-      ;; Trim
       (string-trim result))))
 
 (defun vulpea-ui--count-backlink-mentions (grouped)
@@ -852,7 +982,61 @@ Removes org link syntax and cleans up whitespace."
         (vui-text (string-join heading-path " > ")
           :face 'vulpea-ui-backlink-heading-face))
       (when preview
-        (vui-text preview :face 'vulpea-ui-backlink-preview-face))))))
+        (vulpea-ui--render-preview preview))))))
+
+(defun vulpea-ui--render-preview (preview)
+  "Render PREVIEW based on its type."
+  (let ((type (plist-get preview :type)))
+    (pcase type
+      ('meta
+       (vui-hstack
+        :spacing 0
+        (vui-text (concat (plist-get preview :key) ": ")
+          :face 'vulpea-ui-backlink-meta-key-face)
+        (vui-text (or (plist-get preview :value) "")
+          :face 'vulpea-ui-backlink-meta-value-face)))
+      ('header
+       (vui-hstack
+        :spacing 1
+        (vui-text "§" :face 'vulpea-ui-backlink-context-face)
+        (vui-text (plist-get preview :text)
+          :face 'vulpea-ui-backlink-preview-face)))
+      ('table
+       (vui-hstack
+        :spacing 1
+        (vui-text "|" :face 'vulpea-ui-backlink-context-face)
+        (vui-text (plist-get preview :text)
+          :face 'vulpea-ui-backlink-preview-face)))
+      ('list
+       (vui-hstack
+        :spacing 1
+        (vui-text "•" :face 'vulpea-ui-backlink-context-face)
+        (vui-text (plist-get preview :text)
+          :face 'vulpea-ui-backlink-preview-face)))
+      ('quote
+       (vui-hstack
+        :spacing 1
+        (vui-text ">" :face 'vulpea-ui-backlink-context-face)
+        (vui-text (plist-get preview :text)
+          :face 'vulpea-ui-backlink-preview-face)))
+      ('code
+       (vui-hstack
+        :spacing 1
+        (vui-text "[code]" :face 'vulpea-ui-backlink-context-face)
+        (vui-text (plist-get preview :text)
+          :face 'vulpea-ui-backlink-preview-face)))
+      ('footnote
+       (vui-hstack
+        :spacing 1
+        (vui-text "[fn]" :face 'vulpea-ui-backlink-context-face)
+        (vui-text (plist-get preview :text)
+          :face 'vulpea-ui-backlink-preview-face)))
+      ('prose
+       (vui-text (concat "\"" (plist-get preview :text) "\"")
+         :face 'vulpea-ui-backlink-preview-face))
+      (_
+       (vui-text (or (plist-get preview :text) "")
+         :face 'vulpea-ui-backlink-preview-face)))))
 
 (defun vulpea-ui--jump-to-file-position (path pos)
   "Jump to position POS in file at PATH."
