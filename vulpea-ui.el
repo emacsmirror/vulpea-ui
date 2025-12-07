@@ -166,6 +166,10 @@ When nil, sidebar remains visible with stale content."
 (defvar vulpea-ui--sidebar-auto-hidden (make-hash-table :test 'eq)
   "Hash table tracking frames where sidebar was auto-hidden.")
 
+(defvar vulpea-ui--rendering nil
+  "Non-nil when sidebar is currently rendering.
+Used to prevent re-entry during render.")
+
 (defun vulpea-ui--sidebar-buffer-name (&optional frame)
   "Return the sidebar buffer name for FRAME.
 If FRAME is nil, use the selected frame."
@@ -207,13 +211,20 @@ If FRAME is nil, use the selected frame."
 
 (defun vulpea-ui--get-main-window (&optional frame)
   "Get the most recently used non-sidebar window in FRAME."
-  (let ((frame (or frame (selected-frame)))
-        (sidebar-win (vulpea-ui--get-sidebar-window frame)))
-    (or (seq-find (lambda (win)
-                    (and (not (eq win sidebar-win))
-                         (not (window-minibuffer-p win))))
-                  (window-list frame nil))
-        (frame-first-window frame))))
+  (let* ((frame (or frame (selected-frame)))
+         (sidebar-win (vulpea-ui--get-sidebar-window frame))
+         (selected (frame-selected-window frame)))
+    ;; Prefer the currently selected window if it's a valid main window
+    (if (and selected
+             (not (eq selected sidebar-win))
+             (not (window-minibuffer-p selected)))
+        selected
+      ;; Fallback to first valid window
+      (or (seq-find (lambda (win)
+                      (and (not (eq win sidebar-win))
+                           (not (window-minibuffer-p win))))
+                    (window-list frame nil))
+          (frame-first-window frame)))))
 
 
 ;;; Content tracking
@@ -240,29 +251,40 @@ If FRAME is nil, use the selected frame."
 (defun vulpea-ui--on-buffer-change (&optional _frame)
   "Handle buffer change events and update sidebar if needed.
 Called from `window-buffer-change-functions'."
-  (let* ((frame (selected-frame))
-         (sidebar-buf (vulpea-ui--get-sidebar-buffer frame))
-         (auto-hidden-p (gethash frame vulpea-ui--sidebar-auto-hidden)))
-    (when sidebar-buf
-      (let* ((main-win (vulpea-ui--get-main-window frame))
-             (main-buf (when main-win (window-buffer main-win)))
-             (note (vulpea-ui--get-note-from-buffer main-buf)))
-        (cond
-         ;; Non-vulpea buffer: auto-hide if enabled
-         ((and (null note)
-               vulpea-ui-sidebar-auto-hide
-               (vulpea-ui--sidebar-visible-p frame))
-          (vulpea-ui--hide-sidebar-window frame)
-          (puthash frame t vulpea-ui--sidebar-auto-hidden))
-         ;; Vulpea buffer and was auto-hidden: show again
-         ((and note auto-hidden-p)
-          (remhash frame vulpea-ui--sidebar-auto-hidden)
-          (vulpea-ui--show-sidebar-window frame)
-          (vulpea-ui--render-sidebar note frame))
-         ;; Vulpea buffer and visible: update if needed
-         ((and note (vulpea-ui--sidebar-visible-p frame)
-               (vulpea-ui--should-update-p note))
-          (vulpea-ui--render-sidebar note frame)))))))
+  ;; Skip minibuffer interactions and re-entry during render
+  (unless (or (minibufferp) vulpea-ui--rendering)
+    (let* ((frame (selected-frame))
+           (sidebar-buf (vulpea-ui--get-sidebar-buffer frame))
+           (auto-hidden-p (gethash frame vulpea-ui--sidebar-auto-hidden)))
+      (when sidebar-buf
+        (let* ((main-win (vulpea-ui--get-main-window frame))
+               (main-buf (when main-win (window-buffer main-win)))
+               (note (vulpea-ui--get-note-from-buffer main-buf))
+               ;; Only auto-hide if we previously had a note displayed
+               (had-note (buffer-local-value 'vulpea-ui--current-note sidebar-buf))
+               (visible (vulpea-ui--sidebar-visible-p frame))
+               ;; Compare IDs directly (had-note is from sidebar buffer)
+               (same-note (and note had-note
+                               (equal (vulpea-note-id note)
+                                      (vulpea-note-id had-note)))))
+          (cond
+           ;; Non-vulpea buffer: auto-hide if enabled AND we had a note before
+           ((and (null note)
+                 had-note
+                 vulpea-ui-sidebar-auto-hide
+                 visible)
+            (vulpea-ui--hide-sidebar-window frame)
+            (puthash frame t vulpea-ui--sidebar-auto-hidden))
+           ;; Vulpea buffer and was auto-hidden: show again
+           ((and note auto-hidden-p)
+            (remhash frame vulpea-ui--sidebar-auto-hidden)
+            (vulpea-ui--show-sidebar-window frame)
+            ;; Only re-render if note actually changed
+            (unless same-note
+              (vulpea-ui--render-sidebar note frame)))
+           ;; Vulpea buffer and visible: update if needed
+           ((and note visible (not same-note))
+            (vulpea-ui--render-sidebar note frame))))))))
 
 (defun vulpea-ui--hide-sidebar-window (&optional frame)
   "Hide the sidebar window in FRAME without killing the buffer."
@@ -278,11 +300,13 @@ Called from `window-buffer-change-functions'."
 
 (defun vulpea-ui--setup-hooks ()
   "Set up hooks for sidebar content tracking."
-  (add-hook 'window-buffer-change-functions #'vulpea-ui--on-buffer-change))
+  (add-hook 'window-buffer-change-functions #'vulpea-ui--on-buffer-change)
+  (add-hook 'window-selection-change-functions #'vulpea-ui--on-buffer-change))
 
 (defun vulpea-ui--teardown-hooks ()
   "Remove hooks for sidebar content tracking."
-  (remove-hook 'window-buffer-change-functions #'vulpea-ui--on-buffer-change))
+  (remove-hook 'window-buffer-change-functions #'vulpea-ui--on-buffer-change)
+  (remove-hook 'window-selection-change-functions #'vulpea-ui--on-buffer-change))
 
 
 ;;; Utility functions
@@ -633,7 +657,8 @@ NOTE is the parent note for navigation."
 
 (defun vulpea-ui--render-sidebar (note &optional frame)
   "Render the sidebar with NOTE as context in FRAME."
-  (let* ((frame (or frame (selected-frame)))
+  (let* ((vulpea-ui--rendering t)  ; Prevent re-entry
+         (frame (or frame (selected-frame)))
          (buf-name (vulpea-ui--sidebar-buffer-name frame))
          (buf (get-buffer-create buf-name))
          (sidebar-win (vulpea-ui--get-sidebar-window frame))
@@ -642,13 +667,14 @@ NOTE is the parent note for navigation."
     (when sidebar-win
       (select-window sidebar-win t))
     (with-current-buffer buf
-      (setq vulpea-ui--current-note note)
-      ;; Always mount fresh - this ensures clean state for new note
+      ;; Mount fresh - vui-mount calls kill-all-local-variables
       (let ((new-instance
              (vui-mount
               (vui-component 'vulpea-ui-sidebar-root :note note)
               buf-name)))
         (puthash frame new-instance vulpea-ui--sidebar-instances))
+      ;; Set current note AFTER mount (vui-mount kills local variables)
+      (setq vulpea-ui--current-note note)
       (goto-char (point-min)))
     ;; Restore original window
     (when (window-live-p original-window)
