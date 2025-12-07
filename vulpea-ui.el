@@ -151,6 +151,19 @@ meta, header, table, list, quote, code, footnote, prose."
             (const prose))))
   :group 'vulpea-ui)
 
+(defcustom vulpea-ui-backlinks-sort nil
+  "How to sort backlinks in the widget.
+nil means no sorting (order from database query).
+`title-asc' means sort alphabetically by note title (A-Z).
+`title-desc' means sort reverse alphabetically by note title (Z-A).
+A function means use it as comparator (receives two group plists
+with :file-note, :path, and :mentions)."
+  :type '(choice (const :tag "No sorting" nil)
+                 (const :tag "By title A-Z" title-asc)
+                 (const :tag "By title Z-A" title-desc)
+                 (function :tag "Custom comparator"))
+  :group 'vulpea-ui)
+
 (defcustom vulpea-ui-fast-parse nil
   "Use fast org-mode initialization for parsing.
 When non-nil, skip mode hooks when parsing org files for headings
@@ -743,13 +756,25 @@ Applies `vulpea-ui-backlinks-note-filter' and `vulpea-ui-backlinks-context-types
                                 :path path
                                 :mentions enriched)
                           result))))))
-          ;; Sort groups by file-note title
-          (list :groups (seq-sort (lambda (a b)
-                                    (string< (or (vulpea-note-title (plist-get a :file-note)) "")
-                                             (or (vulpea-note-title (plist-get b :file-note)) "")))
-                                  result)
+          ;; Sort groups according to configuration
+          (list :groups (vulpea-ui--sort-backlink-groups result)
                 :filtered-count filtered-count
                 :total-count total-count))))))
+
+(defun vulpea-ui--sort-backlink-groups (groups)
+  "Sort GROUPS according to `vulpea-ui-backlinks-sort'."
+  (pcase vulpea-ui-backlinks-sort
+    ('nil groups)
+    ('title-asc (seq-sort (lambda (a b)
+                            (string< (or (vulpea-note-title (plist-get a :file-note)) "")
+                                     (or (vulpea-note-title (plist-get b :file-note)) "")))
+                          groups))
+    ('title-desc (seq-sort (lambda (a b)
+                             (string> (or (vulpea-note-title (plist-get a :file-note)) "")
+                                      (or (vulpea-note-title (plist-get b :file-note)) "")))
+                           groups))
+    ((pred functionp) (seq-sort vulpea-ui-backlinks-sort groups))
+    (_ groups)))
 
 (defun vulpea-ui--enrich-backlink-mentions (path mentions target-id)
   "Enrich MENTIONS with heading context and preview from file at PATH.
