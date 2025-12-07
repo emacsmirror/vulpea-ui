@@ -432,7 +432,7 @@ CHILDREN is a function returning the widget content."
       :face 'vulpea-ui-widget-header-face)
     (vui-text title :face 'vulpea-ui-widget-header-face)
     (when count
-      (vui-text (format "(%d)" count) :face 'vulpea-ui-widget-count-face)))
+      (vui-text (format "(%s)" count) :face 'vulpea-ui-widget-count-face)))
    ;; Content (when not collapsed)
    (unless collapsed
      (when children
