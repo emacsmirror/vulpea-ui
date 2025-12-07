@@ -1055,7 +1055,7 @@ Returns a plist with :type and type-specific content:
          ;; Group mentions by heading path
          (grouped (vulpea-ui--group-mentions-by-heading mentions)))
     (vui-vstack
-     :spacing 1
+     :spacing 0
      ;; File-level note link
      (if file-note
          (vui-component 'vulpea-ui-note-link :note file-note)
@@ -1093,12 +1093,13 @@ Returns list of (:heading-path :depth :mentions) plists."
          (mentions (plist-get hg :mentions))
          ;; Extra indent for nested headings (2 per level after first)
          (heading-indent (if (> depth 1) (* (1- depth) 2) 0))
-         ;; Only show the last heading in the path
-         (display-heading (when heading-path (car (last heading-path)))))
+         ;; Only show the last heading in the path (cleaned of org links)
+         (display-heading (when heading-path
+                            (vulpea-ui--clean-org-links (car (last heading-path))))))
     (vui-vstack
      :spacing 0
      :indent heading-indent
-     ;; Heading text (if any) - bold, not clickable unless it's a header context
+     ;; Heading text (if any) - bold, not clickable
      (when display-heading
        (vui-text display-heading :face 'vulpea-ui-backlink-heading-face))
      ;; Mentions under this heading
