@@ -619,11 +619,16 @@ NOTE is the parent note for navigation."
   (let* ((title (plist-get heading :title))
          (level (plist-get heading :level))
          (pos (plist-get heading :pos))
-         (stars (make-string level ?*)))
-    (vui-button (concat stars " " title)
-      :face 'shadow
-      :on-click (lambda ()
-                  (vulpea-ui--jump-to-position note pos)))))
+         ;; Indent based on level: level 1 = 0, level 2 = 5, etc.
+         (indent (* (1- level) 5)))
+    (vui-vstack
+     :indent indent
+     (vui-hstack
+      (vui-button "->"
+        :face 'shadow
+        :on-click (lambda ()
+                    (vulpea-ui--jump-to-position note pos)))
+      (vui-text title :face 'shadow)))))
 
 (defun vulpea-ui--jump-to-position (note pos)
   "Jump to position POS in NOTE's file."
