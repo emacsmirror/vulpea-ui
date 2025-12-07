@@ -129,6 +129,28 @@ When non-nil, shows a snippet of text around each backlink mention."
   :type 'integer
   :group 'vulpea-ui)
 
+(defcustom vulpea-ui-backlinks-note-filter #'identity
+  "Function to filter which notes appear in backlinks.
+Called with a vulpea-note and should return non-nil to include it."
+  :type 'function
+  :group 'vulpea-ui)
+
+(defcustom vulpea-ui-backlinks-context-types t
+  "Context types to display in backlinks widget.
+Either t for all types, or a list of allowed types:
+meta, header, table, list, quote, code, footnote, prose."
+  :type '(choice (const :tag "All types" t)
+                 (repeat :tag "Selected types"
+                         (choice (const meta)
+                                 (const header)
+                                 (const table)
+                                 (const list)
+                                 (const quote)
+                                 (const code)
+                                 (const footnote)
+                                 (const prose))))
+  :group 'vulpea-ui)
+
 
 ;;; Context
 
@@ -623,29 +645,38 @@ Groups backlinks by file and shows heading context with optional previews."
   :render
   (let ((note (use-vulpea-ui-note)))
     (when note
-      (let ((grouped (use-memo (note)
-                       (vulpea-ui--get-grouped-backlinks note))))
+      (let* ((result (use-memo (note)
+                       (vulpea-ui--get-grouped-backlinks note)))
+             (groups (plist-get result :groups))
+             (filtered-count (plist-get result :filtered-count))
+             (total-count (plist-get result :total-count)))
         (vui-component 'vulpea-ui-widget
           :title "Backlinks"
-          :count (vulpea-ui--count-backlink-mentions grouped)
+          :count (if (= filtered-count total-count)
+                     filtered-count
+                   (format "%d/%d" filtered-count total-count))
           :children
           (lambda ()
-            (if grouped
+            (if groups
                 (vui-vstack
                  :spacing 1
-                 (seq-map #'vulpea-ui--render-backlink-group grouped))
+                 (seq-map #'vulpea-ui--render-backlink-group groups))
               (vui-text "No backlinks" :face 'shadow))))))))
 
 (defun vulpea-ui--get-grouped-backlinks (note)
   "Get backlinks to NOTE grouped by file.
-Returns a list of plists with :file-note and :mentions.
-Each mention has :heading-path, :pos, and :preview."
-  (when note
+Returns a plist with :groups, :filtered-count, and :total-count.
+Each group has :file-note, :path, and :mentions.
+Each mention has :heading-path, :pos, and :preview.
+Applies `vulpea-ui-backlinks-note-filter' and `vulpea-ui-backlinks-context-types'."
+  (if (null note)
+      (list :groups nil :filtered-count 0 :total-count 0)
     (let* ((target-id (vulpea-note-id note))
            (backlinks (vulpea-db-query-by-links-some
                        (list (cons "id" target-id))))
            ;; Group backlinks by file path
-           (by-path (make-hash-table :test 'equal)))
+           (by-path (make-hash-table :test 'equal))
+           (total-count 0))
       ;; Collect all mentions grouped by path
       (dolist (bl backlinks)
         (let* ((path (vulpea-note-path bl))
@@ -657,6 +688,7 @@ Each mention has :heading-path, :pos, and :preview."
                                      (equal target-id (plist-get link :dest))))
                               links)))
           (dolist (link target-links)
+            (cl-incf total-count)
             (let ((pos (plist-get link :pos)))
               (push (list :pos pos :source-note bl)
                     (gethash path by-path))))))
@@ -668,29 +700,47 @@ Each mention has :heading-path, :pos, and :preview."
         ;; Index file notes by path
         (dolist (fn file-notes)
           (puthash (vulpea-note-path fn) fn file-notes-by-path))
-        ;; Build grouped result
-        (let ((result nil))
+        ;; Build grouped result with filtering
+        (let ((result nil)
+              (filtered-count 0))
           (dolist (path paths)
             (let* ((file-note (gethash path file-notes-by-path))
-                   (mentions (gethash path by-path))
-                   ;; Sort mentions by position
-                   (sorted-mentions (seq-sort
-                                     (lambda (a b)
-                                       (< (plist-get a :pos) (plist-get b :pos)))
-                                     mentions))
-                   ;; Enrich mentions with heading context and preview
-                   (enriched (vulpea-ui--enrich-backlink-mentions
-                              path sorted-mentions target-id)))
-              (when (or file-note enriched)
-                (push (list :file-note file-note
-                            :path path
-                            :mentions enriched)
-                      result))))
+                   ;; Apply note filter
+                   (note-allowed (funcall vulpea-ui-backlinks-note-filter file-note)))
+              (when note-allowed
+                (let* ((mentions (gethash path by-path))
+                       ;; Sort mentions by position
+                       (sorted-mentions (seq-sort
+                                         (lambda (a b)
+                                           (< (plist-get a :pos) (plist-get b :pos)))
+                                         mentions))
+                       ;; Enrich mentions with heading context and preview
+                       (enriched (vulpea-ui--enrich-backlink-mentions
+                                  path sorted-mentions target-id))
+                       ;; Apply context type filter
+                       (filtered-mentions
+                        (if (eq vulpea-ui-backlinks-context-types t)
+                            enriched
+                          (seq-filter
+                           (lambda (m)
+                             (let ((preview (plist-get m :preview)))
+                               (or (null preview)
+                                   (memq (plist-get preview :type)
+                                         vulpea-ui-backlinks-context-types))))
+                           enriched))))
+                  (when filtered-mentions
+                    (cl-incf filtered-count (length filtered-mentions))
+                    (push (list :file-note file-note
+                                :path path
+                                :mentions filtered-mentions)
+                          result))))))
           ;; Sort groups by file-note title
-          (seq-sort (lambda (a b)
-                      (string< (or (vulpea-note-title (plist-get a :file-note)) "")
-                               (or (vulpea-note-title (plist-get b :file-note)) "")))
-                    result))))))
+          (list :groups (seq-sort (lambda (a b)
+                                    (string< (or (vulpea-note-title (plist-get a :file-note)) "")
+                                             (or (vulpea-note-title (plist-get b :file-note)) "")))
+                                  result)
+                :filtered-count filtered-count
+                :total-count total-count))))))
 
 (defun vulpea-ui--enrich-backlink-mentions (path mentions target-id)
   "Enrich MENTIONS with heading context and preview from file at PATH.
@@ -937,12 +987,6 @@ Returns a plist with :type and type-specific content:
       ;; Clean up multiple spaces
       (setq result (replace-regexp-in-string "[ \t]+" " " result))
       (string-trim result))))
-
-(defun vulpea-ui--count-backlink-mentions (grouped)
-  "Count total mentions across all GROUPED backlinks."
-  (seq-reduce (lambda (acc group)
-                (+ acc (length (plist-get group :mentions))))
-              grouped 0))
 
 (defun vulpea-ui--render-backlink-group (group)
   "Render a backlink GROUP with file note and mentions."
