@@ -237,9 +237,12 @@ If FRAME is nil, use the selected frame."
   (when (buffer-live-p buffer)
     (with-current-buffer buffer
       (when (derived-mode-p 'org-mode)
-        (let ((id (org-entry-get nil "ID")))
-          (when id
-            (vulpea-db-get-by-id id)))))))
+        ;; Always get the file-level ID, not the entry at point
+        (save-excursion
+          (goto-char (point-min))
+          (let ((id (org-entry-get nil "ID")))
+            (when id
+              (vulpea-db-get-by-id id))))))))
 
 (defun vulpea-ui--should-update-p (note)
   "Return non-nil if sidebar should update for NOTE."
