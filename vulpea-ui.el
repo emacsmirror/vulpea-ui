@@ -487,6 +487,16 @@ Returns a plist with :chars, :words, and :links."
                  headings)
               (vui-text "No headings" :face 'shadow))))))))
 
+(defun vulpea-ui--heading-archived-p (hl archive-tag)
+  "Return non-nil if HL or any of its ancestors has ARCHIVE-TAG."
+  (let ((current hl)
+        (archived nil))
+    (while (and current (not archived))
+      (when (member archive-tag (org-element-property :tags current))
+        (setq archived t))
+      (setq current (org-element-property :parent current)))
+    archived))
+
 (defun vulpea-ui--parse-headings (note)
   "Parse headings from NOTE using org-element.
 Returns a list of plists with :title, :level, and :pos."
@@ -497,13 +507,15 @@ Returns a list of plists with :title, :level, and :pos."
         (with-temp-buffer
           (insert-file-contents path)
           (org-mode)
-          (let ((headings nil))
+          (let ((headings nil)
+                (archive-tag org-archive-tag))
             (org-element-map (org-element-parse-buffer 'headline) 'headline
               (lambda (hl)
                 (let ((level (org-element-property :level hl))
                       (title (org-element-property :raw-value hl))
                       (pos (org-element-property :begin hl)))
-                  (when (or (null max-depth) (<= level max-depth))
+                  (when (and (not (vulpea-ui--heading-archived-p hl archive-tag))
+                             (or (null max-depth) (<= level max-depth)))
                     (push (list :title title :level level :pos pos) headings)))))
             (nreverse headings)))))))
 
