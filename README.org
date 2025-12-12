@@ -74,19 +74,6 @@ To automatically open the sidebar when entering org-mode buffers:
 (setq vulpea-ui-sidebar-size 0.33)
 #+end_src
 
-** Widget selection (legacy)
-
-When using the widget registry (recommended), this variable is ignored. See [[*Widget Registration][Widget Registration]] below.
-
-#+begin_src emacs-lisp
-;; Legacy: manual widget list (used only if registry is empty)
-(setq vulpea-ui-sidebar-widgets
-      '(vulpea-ui-widget-stats
-        vulpea-ui-widget-outline
-        vulpea-ui-widget-backlinks
-        vulpea-ui-widget-links))
-#+end_src
-
 ** Outline widget
 
 #+begin_src emacs-lisp
