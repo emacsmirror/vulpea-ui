@@ -159,9 +159,9 @@ nil means no sorting (order from database query).
 A function means use it as comparator (receives two group plists
 with :file-note, :path, and :mentions)."
   :type '(choice (const :tag "No sorting" nil)
-                 (const :tag "By title A-Z" title-asc)
-                 (const :tag "By title Z-A" title-desc)
-                 (function :tag "Custom comparator"))
+          (const :tag "By title A-Z" title-asc)
+          (const :tag "By title Z-A" title-desc)
+          (function :tag "Custom comparator"))
   :group 'vulpea-ui)
 
 (defcustom vulpea-ui-fast-parse nil
@@ -178,6 +178,72 @@ Disabled by default for safety."
 
 (defcontext vulpea-ui-note nil
   "The current vulpea note being displayed in the sidebar.")
+
+
+;;; Widget Registry
+
+(defvar vulpea-ui--widget-registry (make-hash-table :test 'eq)
+  "Registry of widgets available for the sidebar.
+Keys are widget symbols, values are plists with:
+  :component - the vui component symbol
+  :predicate - optional function taking note, returns non-nil if widget should show
+  :order - numeric order for sorting (lower = earlier)")
+
+(defun vulpea-ui-register-widget (name &rest props)
+  "Register a widget NAME with properties PROPS.
+
+NAME is a symbol identifying the widget.
+
+PROPS is a plist with:
+  :component - (required) symbol naming the vui component
+  :predicate - (optional) function (note) -> bool, widget shown when true
+  :order - (optional) numeric order, default 100
+
+Example:
+  (vulpea-ui-register-widget \\='journal-nav
+    :component \\='vulpea-journal-widget-nav
+    :predicate #\\='vulpea-journal-note-p
+    :order 50)"
+  (let ((component (plist-get props :component))
+        (predicate (plist-get props :predicate))
+        (order (or (plist-get props :order) 100)))
+    (unless component
+      (error "Widget %s requires :component" name))
+    (puthash name
+             (list :component component
+                   :predicate predicate
+                   :order order)
+             vulpea-ui--widget-registry)))
+
+(defun vulpea-ui-unregister-widget (name)
+  "Remove widget NAME from the registry."
+  (remhash name vulpea-ui--widget-registry))
+
+(defun vulpea-ui-widget-set (name prop value)
+  "Set property PROP to VALUE for widget NAME."
+  (when-let ((widget (gethash name vulpea-ui--widget-registry)))
+    (puthash name (plist-put widget prop value) vulpea-ui--widget-registry)))
+
+(defun vulpea-ui--get-widgets-for-note (note)
+  "Return list of widget components to display for NOTE.
+Widgets are filtered by predicate and sorted by order."
+  (let ((widgets nil))
+    ;; Collect applicable widgets
+    (maphash
+     (lambda (name props)
+       (let ((predicate (plist-get props :predicate))
+             (component (plist-get props :component))
+             (order (plist-get props :order)))
+         (when (or (null predicate)
+                   (funcall predicate note))
+           (push (list :name name :component component :order order) widgets))))
+     vulpea-ui--widget-registry)
+    ;; Sort by order
+    (setq widgets (sort widgets (lambda (a b)
+                                  (< (plist-get a :order)
+                                     (plist-get b :order)))))
+    ;; Return component symbols
+    (mapcar (lambda (w) (plist-get w :component)) widgets)))
 
 
 ;;; Faces
@@ -1254,18 +1320,23 @@ Returns a list of plists with :note and :count, sorted by title."
   :render
   (let ((note (use-vulpea-ui-note)))
     (if note
-        (vui-vstack
-         :spacing 1
-         (seq-map (lambda (widget-sym)
-                    (vui-component widget-sym :key widget-sym))
-                  vulpea-ui-sidebar-widgets))
+        (let ((widgets (if (hash-table-empty-p vulpea-ui--widget-registry)
+                           ;; Backwards compatibility: use list if registry empty
+                           vulpea-ui-sidebar-widgets
+                         ;; Use registry with filtering and sorting
+                         (vulpea-ui--get-widgets-for-note note))))
+          (vui-vstack
+           :spacing 1
+           (seq-map (lambda (widget-sym)
+                      (vui-component widget-sym :key widget-sym))
+                    widgets)))
       (vui-text "No vulpea note selected" :face 'shadow))))
 
 (defcomponent vulpea-ui-sidebar-root (note)
   "Root component for the sidebar with NOTE context."
   :render
   (vulpea-ui-note-provider note
-                           (vui-component 'vulpea-ui-sidebar-content)))
+    (vui-component 'vulpea-ui-sidebar-content)))
 
 
 ;;; Rendering
@@ -1357,6 +1428,24 @@ Returns a list of plists with :note and :count, sorted by title."
     (setq vulpea-ui--current-note nil)  ; Force update
     (vulpea-ui--render-sidebar note frame)))
 
+
+;;; Built-in widget registration
+
+(vulpea-ui-register-widget 'stats
+  :component 'vulpea-ui-widget-stats
+  :order 100)
+
+(vulpea-ui-register-widget 'outline
+  :component 'vulpea-ui-widget-outline
+  :order 200)
+
+(vulpea-ui-register-widget 'backlinks
+  :component 'vulpea-ui-widget-backlinks
+  :order 300)
+
+(vulpea-ui-register-widget 'links
+  :component 'vulpea-ui-widget-links
+  :order 400)
 
 (provide 'vulpea-ui)
 ;;; vulpea-ui.el ends here
