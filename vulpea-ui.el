@@ -77,16 +77,6 @@ width (for left/right position) or height (for top/bottom position)."
   :type 'float
   :group 'vulpea-ui)
 
-(defcustom vulpea-ui-sidebar-widgets
-  '(vulpea-ui-widget-stats
-    vulpea-ui-widget-outline
-    vulpea-ui-widget-backlinks
-    vulpea-ui-widget-links)
-  "Ordered list of widgets to display in the sidebar.
-Each element should be a symbol naming a vui component function."
-  :type '(repeat symbol)
-  :group 'vulpea-ui)
-
 (defcustom vulpea-ui-default-widget-collapsed nil
   "Default collapsed state for all widgets.
 When non-nil, widgets start collapsed."
@@ -1320,11 +1310,7 @@ Returns a list of plists with :note and :count, sorted by title."
   :render
   (let ((note (use-vulpea-ui-note)))
     (if note
-        (let ((widgets (if (hash-table-empty-p vulpea-ui--widget-registry)
-                           ;; Backwards compatibility: use list if registry empty
-                           vulpea-ui-sidebar-widgets
-                         ;; Use registry with filtering and sorting
-                         (vulpea-ui--get-widgets-for-note note))))
+        (let ((widgets (vulpea-ui--get-widgets-for-note note)))
           (vui-vstack
            :spacing 1
            (seq-map (lambda (widget-sym)

@@ -61,13 +61,6 @@ In batch mode, execute BODY in the current frame instead."
   "Test that default sidebar size is 0.33."
   (should (= vulpea-ui-sidebar-size 0.33)))
 
-(ert-deftest vulpea-ui-test-default-widgets ()
-  "Test that default widgets list contains expected widgets."
-  (should (memq 'vulpea-ui-widget-outline vulpea-ui-sidebar-widgets))
-  (should (memq 'vulpea-ui-widget-backlinks vulpea-ui-sidebar-widgets))
-  (should (memq 'vulpea-ui-widget-links vulpea-ui-sidebar-widgets))
-  (should (memq 'vulpea-ui-widget-stats vulpea-ui-sidebar-widgets)))
-
 (ert-deftest vulpea-ui-test-default-collapsed ()
   "Test that widgets are not collapsed by default."
   (should-not vulpea-ui-default-widget-collapsed))
