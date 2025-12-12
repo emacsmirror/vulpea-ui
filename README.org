@@ -71,10 +71,12 @@ To automatically open the sidebar when entering org-mode buffers:
 (setq vulpea-ui-sidebar-size 0.33)
 #+end_src
 
-** Widget selection
+** Widget selection (legacy)
+
+When using the widget registry (recommended), this variable is ignored. See [[*Widget Registration][Widget Registration]] below.
 
 #+begin_src emacs-lisp
-;; Default widgets (shown in this order)
+;; Legacy: manual widget list (used only if registry is empty)
 (setq vulpea-ui-sidebar-widgets
       '(vulpea-ui-widget-stats
         vulpea-ui-widget-outline
@@ -206,6 +208,48 @@ Shows notes that link to the current note, grouped by file with:
 
 Shows notes that the current note links to.
 
+* Widget Registration
+
+Widgets are registered with =vulpea-ui-register-widget=, which allows filtering by predicate and ordering.
+
+** Built-in widgets
+
+vulpea-ui registers these widgets by default:
+
+| Widget      | Order | Component                   |
+|-------------+-------+-----------------------------|
+| =stats=     |   100 | =vulpea-ui-widget-stats=    |
+| =outline=   |   200 | =vulpea-ui-widget-outline=  |
+| =backlinks= |   300 | =vulpea-ui-widget-backlinks= |
+| =links=     |   400 | =vulpea-ui-widget-links=    |
+
+** Registering widgets
+
+#+begin_src emacs-lisp
+(vulpea-ui-register-widget 'my-widget
+  :component 'my-custom-widget-component
+  :predicate #'my-note-predicate  ; optional: only show when this returns non-nil
+  :order 150)                      ; optional: default 100
+#+end_src
+
+** Modifying widget properties
+
+#+begin_src emacs-lisp
+;; Change a widget's order
+(vulpea-ui-widget-set 'stats :order 50)
+
+;; Remove a widget
+(vulpea-ui-unregister-widget 'links)
+#+end_src
+
+** How it works
+
+1. Widgets are filtered by their =:predicate= (if any) against the current note
+2. Remaining widgets are sorted by =:order= (ascending)
+3. Each widget's =:component= is rendered
+
+This allows packages like =vulpea-journal= to register context-specific widgets that only appear when viewing certain notes.
+
 * Custom widgets
 
 Create custom widgets using vui's =defcomponent= macro:
@@ -214,20 +258,34 @@ Create custom widgets using vui's =defcomponent= macro:
 (defcomponent my-custom-widget ()
   "My custom widget."
   :render
-  (let ((note (vulpea-ui-current-note)))
-    (when note
-      (vui-component 'vulpea-ui-widget
-        :title "My Widget"
-        :count 42
-        :children
-        (lambda ()
-          (vui-text "Custom content here"))))))
+  (let ((note (use-vulpea-ui-note)))
+    (vui-component 'vulpea-ui-widget
+      :title "My Widget"
+      :count 42
+      :children
+      (lambda ()
+        (vui-text "Custom content here")))))
 #+end_src
 
-Add to the widgets list:
+Register the widget:
 
 #+begin_src emacs-lisp
-(add-to-list 'vulpea-ui-sidebar-widgets 'my-custom-widget t)
+(vulpea-ui-register-widget 'my-widget
+  :component 'my-custom-widget
+  :order 250)  ; after outline, before backlinks
+#+end_src
+
+For context-specific widgets (e.g., only for notes with a certain tag):
+
+#+begin_src emacs-lisp
+(defun my-project-note-p (note)
+  "Return non-nil if NOTE is a project note."
+  (member "project" (vulpea-note-tags note)))
+
+(vulpea-ui-register-widget 'project-tasks
+  :component 'my-project-tasks-widget
+  :predicate #'my-project-note-p
+  :order 150)
 #+end_src
 
 * Faces
