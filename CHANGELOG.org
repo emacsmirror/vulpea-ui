@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+* Unreleased
+
+** Fixes
+
+- Fix widget content not rendering when byte-compiled
+
 * v1.0.0-rc.1 (2025-12-12)
 
 First release candidate.
@@ -24,10 +30,6 @@ First release candidate.
 - Auto-hide when switching to non-vulpea buffers
 - Fast-parse option for performance optimization
 - Easy API for creating custom widgets
-
-** Fixes
-
-- Fix widget content not rendering when byte-compiled
 
 ** Dependencies
 
