@@ -290,17 +290,13 @@ Widgets are filtered by predicate and sorted by order."
   (let ((map (make-sparse-keymap)))
     (define-key map (kbd "q") #'vulpea-ui-sidebar-close)
     (define-key map (kbd "g") #'vulpea-ui-sidebar-refresh)
-    (define-key map (kbd "TAB") #'vulpea-ui-widget-toggle-at-point)
-    (define-key map (kbd "RET") #'vulpea-ui-follow-link-at-point)
     map)
   "Keymap for `vulpea-ui-sidebar-mode'.")
 
-(define-derived-mode vulpea-ui-sidebar-mode special-mode "vulpea-ui"
+(define-derived-mode vulpea-ui-sidebar-mode vui-mode "vulpea-ui"
   "Major mode for the vulpea-ui sidebar buffer.
 \\{vulpea-ui-sidebar-mode-map}"
   :group 'vulpea-ui
-  (setq-local buffer-read-only t)
-  (setq-local cursor-type nil)
   (setq-local truncate-lines t))
 
 
@@ -485,17 +481,16 @@ For use within widget components."
 (defun vulpea-ui-follow-link-at-point ()
   "Follow the link or item under point."
   (interactive)
-  (let ((button (button-at (point))))
-    (when button
-      (button-activate button))))
+  (let ((widget (widget-at (point))))
+    (when widget
+      (widget-apply widget :action))))
 
 (defun vulpea-ui-widget-toggle-at-point ()
   "Toggle the widget collapse state at point."
   (interactive)
-  ;; This will be handled by vui button mechanics
-  (let ((button (button-at (point))))
-    (when button
-      (button-activate button))))
+  (let ((widget (widget-at (point))))
+    (when widget
+      (widget-apply widget :action))))
 
 
 ;;; Widget wrapper component

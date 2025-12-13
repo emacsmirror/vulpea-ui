@@ -4,8 +4,15 @@ All notable changes to this project will be documented in this file.
 
 * Unreleased
 
+** Changed
+
+- Derive =vulpea-ui-sidebar-mode= from =vui-mode= instead of =special-mode=. This enables proper keybinding inheritance and compatibility with packages like [[https://github.com/d12frosted/ace-link-vui][ace-link-vui]].
+- Remove custom =TAB= and =RET= bindings from sidebar mode. Widget navigation now uses standard =vui-mode= bindings (=TAB= / =S-TAB= to navigate, =RET= to activate).
+- Show cursor in sidebar buffer (previously hidden).
+
 ** Fixes
 
+- Fix =vulpea-ui-follow-link-at-point= and =vulpea-ui-widget-toggle-at-point= to use =widget-at= instead of =button-at=.
 - Fix widget content not rendering when byte-compiled
 
 * v1.0.0-rc.1 (2025-12-12)

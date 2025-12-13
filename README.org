@@ -139,12 +139,15 @@ For large org files or many backlinks, enable fast parsing:
 
 * Sidebar keybindings
 
-| Key   | Action                 |
-|-------+------------------------|
-| =q=   | Close sidebar          |
-| =g=   | Refresh content        |
-| =TAB= | Toggle widget at point |
-| =RET= | Follow link at point   |
+| Key     | Action                          |
+|---------+---------------------------------|
+| =q=     | Close sidebar                   |
+| =g=     | Refresh content                 |
+| =TAB=   | Navigate to next widget         |
+| =S-TAB= | Navigate to previous widget     |
+| =RET=   | Activate widget at point        |
+
+For quick navigation to any widget, consider [[https://github.com/d12frosted/ace-link-vui][ace-link-vui]].
 
 * Default widgets
 

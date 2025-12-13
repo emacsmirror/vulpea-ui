@@ -230,11 +230,7 @@ In batch mode, execute BODY in the current frame instead."
   (should (eq (lookup-key vulpea-ui-sidebar-mode-map (kbd "q"))
               'vulpea-ui-sidebar-close))
   (should (eq (lookup-key vulpea-ui-sidebar-mode-map (kbd "g"))
-              'vulpea-ui-sidebar-refresh))
-  (should (eq (lookup-key vulpea-ui-sidebar-mode-map (kbd "TAB"))
-              'vulpea-ui-widget-toggle-at-point))
-  (should (eq (lookup-key vulpea-ui-sidebar-mode-map (kbd "RET"))
-              'vulpea-ui-follow-link-at-point)))
+              'vulpea-ui-sidebar-refresh)))
 
 
 ;;; Integration tests (require display to be available)
