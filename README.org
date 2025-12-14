@@ -281,6 +281,24 @@ For context-specific widgets (e.g., only for notes with a certain tag):
   :order 150)
 #+end_src
 
+* Utility Functions
+
+** vulpea-ui-clean-org-markup
+
+Cleans org-mode markup from text for display purposes:
+
+#+begin_src emacs-lisp
+(vulpea-ui-clean-org-markup text)
+#+end_src
+
+Transformations:
+- Links: =[[url][title]]= → =title=, =[[url]]= → =url= (bare =[[id:...]]= links are removed)
+- Drawers: =:PROPERTIES:...:END:= blocks are removed
+- Metadata: =#+TITLE:=, =#+FILETAGS:=, etc. lines are removed
+- Whitespace: multiple spaces/tabs collapsed to single space
+
+Useful for rendering previews in custom widgets.
+
 * Faces
 
 | Face                                 | Description             |

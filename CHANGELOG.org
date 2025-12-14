@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 
 * Unreleased
 
+** Added
+
+- New public utility function =vulpea-ui-clean-org-markup= for cleaning org-mode markup from text. Removes/simplifies links, drawers, metadata, and whitespace for display purposes.
+
 ** Changed
 
 - Derive =vulpea-ui-sidebar-mode= from =vui-mode= instead of =special-mode=. This enables proper keybinding inheritance and compatibility with packages like [[https://github.com/d12frosted/ace-link-vui][ace-link-vui]].

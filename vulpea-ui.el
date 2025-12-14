@@ -463,6 +463,50 @@ When fast parsing is enabled, skip mode hooks for better performance."
       (delay-mode-hooks (org-mode))
     (org-mode)))
 
+(defun vulpea-ui-clean-org-markup (text)
+  "Clean org-mode markup from TEXT for display purposes.
+
+This function removes or simplifies various org-mode constructs:
+
+- Links: [[url][title]] becomes title, [[url]] becomes url
+- Drawers: :PROPERTIES:...:END: blocks are removed
+- Metadata: #+TITLE:, #+FILETAGS:, etc. lines are removed
+- Whitespace: multiple spaces/tabs are collapsed to single space
+
+Returns the cleaned string, or nil if TEXT is nil."
+  (when text
+    (let ((result text))
+      ;; Remove drawers (:PROPERTIES:...:END:, :LOGBOOK:...:END:, etc.)
+      (setq result (replace-regexp-in-string
+                    "^[ \t]*:[A-Z_]+:[ \t]*\n\\(?:.*\n\\)*?[ \t]*:END:[ \t]*\n?"
+                    ""
+                    result))
+      ;; Remove metadata lines (#+TITLE:, #+FILETAGS:, etc.)
+      (setq result (replace-regexp-in-string
+                    "^[ \t]*#\\+[A-Za-z_]+:.*\n?"
+                    ""
+                    result))
+      ;; Replace [[link][description]] with description (any link type)
+      (setq result (replace-regexp-in-string
+                    "\\[\\[\\([^]]+\\)\\]\\[\\([^]]+\\)\\]\\]"
+                    "\\2"
+                    result))
+      ;; Replace bare [[link]] with the link target
+      ;; For id: links, remove them; for URLs, keep the URL
+      (setq result (replace-regexp-in-string
+                    "\\[\\[id:[^]]+\\]\\]"
+                    ""
+                    result))
+      (setq result (replace-regexp-in-string
+                    "\\[\\[\\([^]]+\\)\\]\\]"
+                    "\\1"
+                    result))
+      ;; Clean up multiple spaces/tabs
+      (setq result (replace-regexp-in-string "[ \t]+" " " result))
+      ;; Clean up multiple newlines (but keep paragraph breaks)
+      (setq result (replace-regexp-in-string "\n\\{3,\\}" "\n\n" result))
+      (string-trim result))))
+
 (defun vulpea-ui-current-note ()
   "Get the current note from context.
 For use within widget components."
@@ -1076,27 +1120,9 @@ Returns a plist with :type and type-specific content:
                        (line-end-position)))))))))
 
 (defun vulpea-ui--clean-org-links (text)
-  "Clean org link syntax from TEXT."
-  (when text
-    (let ((result text))
-      ;; Replace [[id:...][description]] with description
-      (setq result (replace-regexp-in-string
-                    "\\[\\[id:[^]]+\\]\\[\\([^]]+\\)\\]\\]"
-                    "\\1"
-                    result))
-      ;; Remove bare [[id:...]] links
-      (setq result (replace-regexp-in-string
-                    "\\[\\[id:[^]]+\\]\\]"
-                    ""
-                    result))
-      ;; Replace [[any:...][description]] with description
-      (setq result (replace-regexp-in-string
-                    "\\[\\[[^]]+\\]\\[\\([^]]+\\)\\]\\]"
-                    "\\1"
-                    result))
-      ;; Clean up multiple spaces
-      (setq result (replace-regexp-in-string "[ \t]+" " " result))
-      (string-trim result))))
+  "Clean org link syntax from TEXT.
+This is an internal wrapper around `vulpea-ui-clean-org-markup'."
+  (vulpea-ui-clean-org-markup text))
 
 (defun vulpea-ui--render-backlink-group (group)
   "Render a backlink GROUP with file note and mentions."

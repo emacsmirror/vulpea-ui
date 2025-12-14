@@ -291,6 +291,55 @@ In batch mode, execute BODY in the current frame instead."
                  "One and Two")))
 
 
+;;; Org markup cleaning tests (public API)
+
+(ert-deftest vulpea-ui-test-clean-org-markup-nil ()
+  "Test cleaning nil text."
+  (should (null (vulpea-ui-clean-org-markup nil))))
+
+(ert-deftest vulpea-ui-test-clean-org-markup-plain-text ()
+  "Test cleaning text without markup."
+  (should (equal (vulpea-ui-clean-org-markup "plain text") "plain text")))
+
+(ert-deftest vulpea-ui-test-clean-org-markup-link-with-description ()
+  "Test cleaning link with description."
+  (should (equal (vulpea-ui-clean-org-markup "see [[https://example.com][Example]]")
+                 "see Example")))
+
+(ert-deftest vulpea-ui-test-clean-org-markup-bare-url ()
+  "Test cleaning bare URL link keeps the URL."
+  (should (equal (vulpea-ui-clean-org-markup "visit [[https://example.com]]")
+                 "visit https://example.com")))
+
+(ert-deftest vulpea-ui-test-clean-org-markup-bare-id-link ()
+  "Test cleaning bare id link removes it."
+  (should (equal (vulpea-ui-clean-org-markup "see [[id:abc123]] here")
+                 "see here")))
+
+(ert-deftest vulpea-ui-test-clean-org-markup-drawer ()
+  "Test cleaning property drawer."
+  (should (equal (vulpea-ui-clean-org-markup
+                  "before\n:PROPERTIES:\n:ID: abc\n:END:\nafter")
+                 "before\nafter")))
+
+(ert-deftest vulpea-ui-test-clean-org-markup-metadata ()
+  "Test cleaning metadata lines."
+  (should (equal (vulpea-ui-clean-org-markup
+                  "#+TITLE: My Note\n#+FILETAGS: :tag1:tag2:\nContent here")
+                 "Content here")))
+
+(ert-deftest vulpea-ui-test-clean-org-markup-whitespace ()
+  "Test cleaning multiple spaces."
+  (should (equal (vulpea-ui-clean-org-markup "hello    world")
+                 "hello world")))
+
+(ert-deftest vulpea-ui-test-clean-org-markup-combined ()
+  "Test cleaning combined markup."
+  (should (equal (vulpea-ui-clean-org-markup
+                  "#+TITLE: Test\n:PROPERTIES:\n:ID: x\n:END:\nSee [[id:y][Note]] for  details")
+                 "See Note for details")))
+
+
 ;;; Context type detection tests
 
 (ert-deftest vulpea-ui-test-detect-context-meta ()
