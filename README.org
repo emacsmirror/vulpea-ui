@@ -313,6 +313,11 @@ Useful for rendering previews in custom widgets.
 | =vulpea-ui-backlink-meta-value-face= | Meta block values       |
 | =vulpea-ui-backlink-context-face=    | Context type indicators |
 
+* Related Projects
+
+- [[https://github.com/d12frosted/vulpea-journal][vulpea-journal]] - Daily journaling with calendar, navigation, and "on this day" widgets
+- [[https://github.com/d12frosted/ace-link-vui][ace-link-vui]] - Ace-link style navigation for VUI buffers
+
 * License
 
 Copyright (C) 2024-2025 Boris Buliga
