@@ -18,6 +18,7 @@ All notable changes to this project will be documented in this file.
 
 - Fix =vulpea-ui-follow-link-at-point= and =vulpea-ui-widget-toggle-at-point= to use =widget-at= instead of =button-at=.
 - Fix widget content not rendering when byte-compiled
+- Deduplicate backlink mentions with identical heading path and preview text (e.g., multiple links to the same note in one paragraph)
 
 * v1.0.0-rc.1 (2025-12-12)
 

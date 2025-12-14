@@ -880,7 +880,8 @@ Applies `vulpea-ui-backlinks-note-filter' and
 (defun vulpea-ui--enrich-backlink-mentions (path mentions target-id)
   "Enrich MENTIONS with heading context and preview from file at PATH.
 TARGET-ID is the ID of the note being linked to (for prose context extraction).
-Filters by `vulpea-ui-backlinks-context-types' BEFORE expensive operations."
+Filters by `vulpea-ui-backlinks-context-types' BEFORE expensive operations.
+Deduplicates mentions with identical heading-path and preview text."
   (when (and path mentions)
     (with-temp-buffer
       (insert-file-contents path)
@@ -909,17 +910,25 @@ Filters by `vulpea-ui-backlinks-context-types' BEFORE expensive operations."
                  mentions-with-type))))
         ;; Only parse headings if we have any filtered mentions
         (when filtered
-          (let ((headings (vulpea-ui--parse-all-headings)))
-            (seq-map
-             (lambda (mention)
-               (let* ((pos (plist-get mention :pos))
-                      (heading-path (vulpea-ui--find-heading-path headings pos))
-                      (preview (when vulpea-ui-backlinks-show-preview
-                                 (vulpea-ui--extract-preview pos target-id))))
-                 (list :pos pos
-                       :heading-path heading-path
-                       :preview preview)))
-             filtered)))))))
+          (let ((headings (vulpea-ui--parse-all-headings))
+                (seen (make-hash-table :test 'equal))
+                (result nil))
+            (dolist (mention filtered)
+              (let* ((pos (plist-get mention :pos))
+                     (heading-path (vulpea-ui--find-heading-path headings pos))
+                     (preview (when vulpea-ui-backlinks-show-preview
+                                (vulpea-ui--extract-preview pos target-id)))
+                     ;; Create dedup key from heading-path and preview text
+                     (preview-text (when preview (plist-get preview :text)))
+                     (dedup-key (list heading-path preview-text)))
+                ;; Only add if we haven't seen this heading+preview combo
+                (unless (gethash dedup-key seen)
+                  (puthash dedup-key t seen)
+                  (push (list :pos pos
+                              :heading-path heading-path
+                              :preview preview)
+                        result))))
+            (nreverse result)))))))
 
 (defun vulpea-ui--parse-all-headings ()
   "Parse all headings in current buffer.
