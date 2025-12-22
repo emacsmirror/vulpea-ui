@@ -176,7 +176,7 @@ Disabled by default for safety."
   "Registry of widgets available for the sidebar.
 Keys are widget symbols, values are plists with:
   :component - the vui component symbol
-  :predicate - optional function taking note, returns non-nil if widget should show
+  :predicate - function taking note, returns non-nil if widget shows
   :order - numeric order for sorting (lower = earlier)")
 
 (defun vulpea-ui-register-widget (name &rest props)
@@ -464,9 +464,9 @@ When fast parsing is enabled, skip mode hooks for better performance."
     (org-mode)))
 
 (defun vulpea-ui-clean-org-markup (text)
-  "Clean org-mode markup from TEXT for display purposes.
+  "Clean `org-mode' markup from TEXT for display purposes.
 
-This function removes or simplifies various org-mode constructs:
+This function removes or simplifies various `org-mode' constructs:
 
 - Links: [[url][title]] becomes title, [[url]] becomes url
 - Drawers: :PROPERTIES:...:END: blocks are removed
