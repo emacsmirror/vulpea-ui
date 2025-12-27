@@ -245,10 +245,10 @@ This allows packages like =vulpea-journal= to register context-specific widgets 
 
 * Custom widgets
 
-Create custom widgets using vui's =defcomponent= macro:
+Create custom widgets using vui's =vui-defcomponent= macro:
 
 #+begin_src emacs-lisp
-(defcomponent my-custom-widget ()
+(vui-defcomponent my-custom-widget ()
   "My custom widget."
   :render
   (let ((note (use-vulpea-ui-note)))

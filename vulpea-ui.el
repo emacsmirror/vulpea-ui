@@ -166,7 +166,7 @@ Disabled by default for safety."
 
 ;;; Context
 
-(defcontext vulpea-ui-note nil
+(vui-defcontext vulpea-ui-note nil
   "The current vulpea note being displayed in the sidebar.")
 
 
@@ -539,7 +539,7 @@ For use within widget components."
 
 ;;; Widget wrapper component
 
-(defcomponent vulpea-ui-widget (title count)
+(vui-defcomponent vulpea-ui-widget (title count)
   "Standard widget wrapper with collapsible header.
 TITLE is the widget title string.
 COUNT is an optional count to display in the header.
@@ -569,7 +569,7 @@ CHILDREN (implicit) is a function returning the widget content."
 
 ;;; Shared components
 
-(defcomponent vulpea-ui-note-link (note on-click)
+(vui-defcomponent vulpea-ui-note-link (note on-click)
   "Clickable link component for a vulpea note.
 NOTE is the vulpea-note struct.
 ON-CLICK is an optional callback (defaults to `vulpea-ui-visit-note')."
@@ -580,7 +580,7 @@ ON-CLICK is an optional callback (defaults to `vulpea-ui-visit-note')."
                   (funcall (or on-click #'vulpea-ui-visit-note) note))
       :help-echo nil)))
 
-(defcomponent vulpea-ui-note-preview (note max-lines strip-drawers strip-metadata)
+(vui-defcomponent vulpea-ui-note-preview (note max-lines strip-drawers strip-metadata)
   "Rendered preview of note content.
 NOTE is the vulpea-note struct.
 MAX-LINES limits the preview length (default: 10).
@@ -631,12 +631,12 @@ STRIP-METADATA removes org metadata lines when non-nil."
 
 ;;; Stats widget
 
-(defcomponent vulpea-ui-widget-stats ()
+(vui-defcomponent vulpea-ui-widget-stats ()
   "Widget displaying statistics about the current note."
   :render
   (let ((note (use-vulpea-ui-note)))
     (when note
-      (let* ((stats (use-memo (note)
+      (let* ((stats (vui-use-memo (note)
                       (vulpea-ui--compute-stats note)))
              (chars (plist-get stats :chars))
              (words (plist-get stats :words))
@@ -685,12 +685,12 @@ Returns a plist with :chars, :words, and :links."
 
 ;;; Outline widget
 
-(defcomponent vulpea-ui-widget-outline ()
+(vui-defcomponent vulpea-ui-widget-outline ()
   "Widget displaying the heading structure of the current note."
   :render
   (let ((note (use-vulpea-ui-note)))
     (when note
-      (let ((headings (use-memo (note)
+      (let ((headings (vui-use-memo (note)
                         (vulpea-ui--parse-headings note))))
         (vui-component 'vulpea-ui-widget
           :title "Outline"
@@ -766,13 +766,13 @@ NOTE is the parent note for navigation."
 
 ;;; Backlinks widget
 
-(defcomponent vulpea-ui-widget-backlinks ()
+(vui-defcomponent vulpea-ui-widget-backlinks ()
   "Widget displaying notes that link to the current note.
 Groups backlinks by file and shows heading context with optional previews."
   :render
   (let ((note (use-vulpea-ui-note)))
     (when note
-      (let* ((result (use-memo (note)
+      (let* ((result (vui-use-memo (note)
                        (vulpea-ui--get-grouped-backlinks note)))
              (groups (plist-get result :groups))
              (filtered-count (plist-get result :filtered-count))
@@ -1273,12 +1273,12 @@ Renders the preview as a clickable button to jump to the mention."
 
 ;;; Forward links widget
 
-(defcomponent vulpea-ui-widget-links ()
+(vui-defcomponent vulpea-ui-widget-links ()
   "Widget displaying notes that the current note links to."
   :render
   (let ((note (use-vulpea-ui-note)))
     (when note
-      (let ((forward-links (use-memo (note)
+      (let ((forward-links (vui-use-memo (note)
                              (vulpea-ui--get-forward-links note))))
         (vui-component 'vulpea-ui-widget
           :title "Links"
@@ -1335,7 +1335,7 @@ Returns a list of plists with :note and :count, sorted by title."
 
 ;;; Root component
 
-(defcomponent vulpea-ui-sidebar-content ()
+(vui-defcomponent vulpea-ui-sidebar-content ()
   "Content component for the sidebar (uses context)."
   :render
   (let ((note (use-vulpea-ui-note)))
@@ -1348,7 +1348,7 @@ Returns a list of plists with :note and :count, sorted by title."
                     widgets)))
       (vui-text "No vulpea note selected" :face 'shadow))))
 
-(defcomponent vulpea-ui-sidebar-root (note)
+(vui-defcomponent vulpea-ui-sidebar-root (note)
   "Root component for the sidebar with NOTE context."
   :render
   (vulpea-ui-note-provider note
