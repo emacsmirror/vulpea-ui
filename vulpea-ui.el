@@ -1,6 +1,7 @@
 ;;; vulpea-ui.el --- Sidebar infrastructure and widget framework for vulpea notes -*- lexical-binding: t; -*-
 
 ;; Copyright (C) 2024-2025 Boris Buliga
+;; SPDX-License-Identifier: GPL-3.0-or-later
 
 ;; Author: Boris Buliga <boris@d12frosted.io>
 ;; Maintainer: Boris Buliga <boris@d12frosted.io>
@@ -1448,20 +1449,20 @@ Returns a list of plists with :note and :count, sorted by title."
 ;;; Built-in widget registration
 
 (vulpea-ui-register-widget 'stats
-  :component 'vulpea-ui-widget-stats
-  :order 100)
+                           :component 'vulpea-ui-widget-stats
+                           :order 100)
 
 (vulpea-ui-register-widget 'outline
-  :component 'vulpea-ui-widget-outline
-  :order 200)
+                           :component 'vulpea-ui-widget-outline
+                           :order 200)
 
 (vulpea-ui-register-widget 'backlinks
-  :component 'vulpea-ui-widget-backlinks
-  :order 300)
+                           :component 'vulpea-ui-widget-backlinks
+                           :order 300)
 
 (vulpea-ui-register-widget 'links
-  :component 'vulpea-ui-widget-links
-  :order 400)
+                           :component 'vulpea-ui-widget-links
+                           :order 400)
 
 (provide 'vulpea-ui)
 ;;; vulpea-ui.el ends here
