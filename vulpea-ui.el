@@ -348,7 +348,7 @@ If FRAME is nil, use the selected frame."
 
 (defun vulpea-ui--sidebar-visible-p (&optional frame)
   "Return non-nil if the sidebar is visible in FRAME."
-  (not (null (vulpea-ui--get-sidebar-window frame))))
+  (vulpea-ui--get-sidebar-window frame))
 
 
 ;;; Window management
