@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file.
 
 * Unreleased
 
+** Added
+
+- Automatic sidebar refresh on save and idle. Controlled by =vulpea-ui-auto-refresh= (default =t=) and =vulpea-ui-auto-refresh-delay= (default 1.5 seconds).
+- Stats widget now reads from buffer instead of disk, enabling live word/char count updates while editing.
+
 * v1.0.0-rc.2 (2025-12-14)
 
 ** Added

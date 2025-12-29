@@ -116,6 +116,12 @@ To automatically open the sidebar when entering org-mode buffers:
 
 ;; Start widgets collapsed
 (setq vulpea-ui-default-widget-collapsed nil)
+
+;; Auto-refresh sidebar on save and idle (enabled by default)
+(setq vulpea-ui-auto-refresh t)
+
+;; Idle delay before auto-refresh (in seconds)
+(setq vulpea-ui-auto-refresh-delay 1.5)
 #+end_src
 
 ** Performance
