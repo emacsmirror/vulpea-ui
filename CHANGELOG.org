@@ -4,6 +4,8 @@ All notable changes to this project will be documented in this file.
 
 * Unreleased
 
+* v1.0.0 (2025-12-30)
+
 ** Added
 
 - Automatic sidebar refresh on save and idle. Controlled by =vulpea-ui-auto-refresh= (default =t=) and =vulpea-ui-auto-refresh-delay= (default 1.5 seconds).
