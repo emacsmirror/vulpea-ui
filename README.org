@@ -5,6 +5,7 @@ Sidebar infrastructure and widget framework for [[https://github.com/d12frosted/
 
 #+begin_html
 <p>
+  <a href="https://melpa.org/#/vulpea-ui"><img alt="MELPA" src="https://melpa.org/packages/vulpea-ui-badge.svg"/></a>
   <a href="https://github.com/d12frosted/vulpea-ui/actions/workflows/main.yml"><img alt="CI" src="https://github.com/d12frosted/vulpea-ui/actions/workflows/main.yml/badge.svg"/></a>
   <img alt="version" src="https://img.shields.io/github/v/tag/d12frosted/vulpea-ui?label=version"/>
 </p>
@@ -29,17 +30,22 @@ Sidebar infrastructure and widget framework for [[https://github.com/d12frosted/
 - [[https://github.com/d12frosted/vulpea][vulpea]] (v2)
 - [[https://github.com/d12frosted/vui][vui]]
 
+** Using package.el (MELPA)
+
+#+begin_src emacs-lisp
+(package-install 'vulpea-ui)
+#+end_src
+
 ** Using straight.el
 
 #+begin_src emacs-lisp
-(straight-use-package
- '(vulpea-ui :host github :repo "d12frosted/vulpea-ui"))
+(straight-use-package 'vulpea-ui)
 #+end_src
 
 ** Using elpaca
 
 #+begin_src emacs-lisp
-(elpaca (vulpea-ui :host github :repo "d12frosted/vulpea-ui"))
+(elpaca vulpea-ui)
 #+end_src
 
 * Usage
