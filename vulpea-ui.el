@@ -106,11 +106,6 @@ When non-nil, shows a snippet of text around each backlink mention."
   :type 'boolean
   :group 'vulpea-ui)
 
-(defcustom vulpea-ui-backlinks-preview-lines 2
-  "Number of lines to show in backlink previews for prose context."
-  :type 'integer
-  :group 'vulpea-ui)
-
 (defcustom vulpea-ui-backlinks-prose-chars-before 30
   "Number of characters to show before link in prose previews."
   :type 'integer
@@ -595,9 +590,7 @@ For use within widget components."
 (defun vulpea-ui-widget-toggle-at-point ()
   "Toggle the widget collapse state at point."
   (interactive)
-  (let ((widget (widget-at (point))))
-    (when widget
-      (widget-apply widget :action))))
+  (vulpea-ui-follow-link-at-point))
 
 
 ;;; Widget wrapper component
@@ -1277,57 +1270,33 @@ Renders the preview as a clickable button to jump to the mention."
   "Render PREVIEW as a clickable button to jump to PATH at POS."
   (let ((type (plist-get preview :type))
         (on-click (lambda () (vulpea-ui--jump-to-file-position path pos))))
-    (pcase type
-      ('meta
-       (vui-button (concat "⊢ " (plist-get preview :key) ": "
-                           (or (plist-get preview :value) ""))
-         :face 'vulpea-ui-backlink-preview-face
-         :no-decoration t
-         :on-click on-click
-         :help-echo nil))
-      ('header
-       ;; Header context means the link is IN the heading text - make it clickable
-       (vui-button (concat "§ " (plist-get preview :text))
-         :face 'vulpea-ui-backlink-preview-face
-         :no-decoration t
-         :on-click on-click
-         :help-echo nil))
-      ('table
-       (vui-button (concat "▤ " (plist-get preview :text))
-         :face 'vulpea-ui-backlink-preview-face
-         :no-decoration t
-         :on-click on-click
-         :help-echo nil))
-      ('list
-       (vui-button (concat "· " (plist-get preview :text))
-         :face 'vulpea-ui-backlink-preview-face
-         :no-decoration t
-         :on-click on-click
-         :help-echo nil))
-      ('quote
-       (vui-button (concat "> " (plist-get preview :text))
-         :face 'vulpea-ui-backlink-preview-face
-         :no-decoration t
-         :on-click on-click
-         :help-echo nil))
-      ('code
-       (vui-button (concat "λ " (plist-get preview :text))
-         :face 'vulpea-ui-backlink-preview-face
-         :no-decoration t
-         :on-click on-click
-         :help-echo nil))
-      ('footnote
-       (vui-button (concat "† " (plist-get preview :text))
-         :face 'vulpea-ui-backlink-preview-face
-         :no-decoration t
-         :on-click on-click
-         :help-echo nil))
-      (_
-       (vui-button (or (plist-get preview :text) "")
-         :face 'vulpea-ui-backlink-preview-face
-         :no-decoration t
-         :on-click on-click
-         :help-echo nil)))))
+    (let ((indicator (pcase type
+                       ('meta "⊢")
+                       ('header "§")
+                       ('table "▤")
+                       ('list "·")
+                       ('quote ">")
+                       ('code "λ")
+                       ('footnote "†")
+                       (_ nil)))
+          (text (pcase type
+                  ('meta (concat (plist-get preview :key) ": "
+                                 (or (plist-get preview :value) "")))
+                  (_ (or (plist-get preview :text) "")))))
+      (if indicator
+          (vui-hstack
+           :spacing 1
+           (vui-text indicator :face 'vulpea-ui-backlink-context-face)
+           (vui-button text
+             :face 'vulpea-ui-backlink-preview-face
+             :no-decoration t
+             :on-click on-click
+             :help-echo nil))
+        (vui-button text
+          :face 'vulpea-ui-backlink-preview-face
+          :no-decoration t
+          :on-click on-click
+          :help-echo nil)))))
 
 (defun vulpea-ui--jump-to-file-position (path pos)
   "Jump to position POS in file at PATH."

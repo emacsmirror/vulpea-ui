@@ -93,9 +93,6 @@ To automatically open the sidebar when entering org-mode buffers:
 ;; Show/hide content previews
 (setq vulpea-ui-backlinks-show-preview t)
 
-;; Lines to show in prose previews
-(setq vulpea-ui-backlinks-preview-lines 2)
-
 ;; Characters before/after link in prose previews
 (setq vulpea-ui-backlinks-prose-chars-before 30)
 (setq vulpea-ui-backlinks-prose-chars-after 50)
@@ -118,6 +115,7 @@ To automatically open the sidebar when entering org-mode buffers:
 
 #+begin_src emacs-lisp
 ;; Auto-hide sidebar when switching to non-vulpea buffers
+;; When nil, sidebar remains visible with stale content
 (setq vulpea-ui-sidebar-auto-hide t)
 
 ;; Start widgets collapsed
@@ -158,6 +156,8 @@ For large org files or many backlinks, enable fast parsing:
 | =TAB=   | Navigate to next widget         |
 | =S-TAB= | Navigate to previous widget     |
 | =RET=   | Activate widget at point        |
+
+=TAB=, =S-TAB=, and =RET= are inherited from =vui-mode=. =q= and =g= are sidebar-specific.
 
 For quick navigation to any widget, consider [[https://github.com/d12frosted/ace-link-vui][ace-link-vui]].
 
